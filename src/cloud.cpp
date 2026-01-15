@@ -47,40 +47,135 @@ void Cloud::Rain() {
     if (_pause)
         return;
 
-    high_resolution_clock::time_point curTime = high_resolution_clock::now();
-    SpawnDroplets(curTime);
-
-    if (_forceDrawEverything)
+    static bool initialized = false;
+    static size_t charIndex = 0;
+    static size_t screenPos = 0;
+    static size_t spaceCount = 0;
+    static vector<wchar_t> allChars;
+    
+    if (!initialized) {
         clear();
-
-    const bool timeForGlitch = TimeForGlitch(curTime);
-    for (auto& droplet : _droplets) {
-        if (!droplet.IsAlive())
-            continue;
-        droplet.Advance(curTime);
-        if (timeForGlitch)
-            DoGlitch(droplet);
-        droplet.Draw(curTime, _forceDrawEverything);
-        if (!droplet.IsAlive()) {
-            auto& cs = _colStat[droplet.GetCol()];
-            cs.numDroplets--;
-
-            // If the droplet dies very early, then mark the column as free
-            if (droplet.GetTailPutLine() <= _lines / 4)
-                cs.canSpawn = true;
+        
+        // Create our own character set with a wide range of Unicode characters
+        // Basic Latin: ! to ~ (33-126)
+        for (wchar_t c = 33; c <= 126; c++) {
+            allChars.push_back(c);
         }
+        
+        // Latin Extended-A (some common characters)
+        for (wchar_t c = 0xC0; c <= 0xFF; c++) {
+            allChars.push_back(c);
+        }
+        
+        // Greek (0370-03FF)
+        for (wchar_t c = 0x0370; c <= 0x03FF; c++) {
+            allChars.push_back(c);
+        }
+        
+        // Cyrillic (0410-044F)
+        for (wchar_t c = 0x0410; c <= 0x044F; c++) {
+            allChars.push_back(c);
+        }
+        
+        // Katakana (FF64-FF9F)
+        for (wchar_t c = 0xFF64; c <= 0xFF9F; c++) {
+            allChars.push_back(c);
+        }
+        
+        // Box drawing characters (2500-257F)
+        for (wchar_t c = 0x2500; c <= 0x257F; c++) {
+            allChars.push_back(c);
+        }
+        
+        // Block elements (2580-259F)
+        for (wchar_t c = 0x2580; c <= 0x259F; c++) {
+            allChars.push_back(c);
+        }
+        
+        initialized = true;
     }
 
-    if (!_message.empty()) {
-        CalcMessage();
-        DrawMessage();
+    // Get screen dimensions
+    int maxY, maxX;
+    getmaxyx(stdscr, maxY, maxX);
+    
+    // If we have characters available
+    if (charIndex < allChars.size()) {
+        // Calculate position
+        int y = screenPos / maxX;
+        int x = screenPos % maxX;
+        
+        if (y < maxY) {
+            // Use color pair 5 (bright green from the default GREEN scheme)
+            // or cycle through available color pairs
+            int colorPair = (charIndex % _numColorPairs) + 1;
+            if (colorPair > _numColorPairs) colorPair = _numColorPairs;
+            
+            // Create wide character
+            cchar_t wc = {};
+            wc.chars[0] = allChars[charIndex];
+            
+            // Apply color and bold attribute
+            if (_colorMode != ColorMode::MONO) {
+                attron(COLOR_PAIR(colorPair) | A_BOLD);
+                mvadd_wch(y, x, &wc);
+                attroff(COLOR_PAIR(colorPair) | A_BOLD);
+            } else {
+                attron(A_BOLD);
+                mvadd_wch(y, x, &wc);
+                attroff(A_BOLD);
+            }
+            
+            charIndex++;
+            screenPos++;
+            
+            // Note: Don't reset charIndex here - we need to print spaces after all chars
+        } else {
+            // Screen is full, clear and start over
+            clear();
+            screenPos = 0;
+            spaceCount = 0;
+        }
+    } else if (screenPos < (size_t)(maxY * maxX)) {
+        // Print spaces after all characters
+        int y = screenPos / maxX;
+        int x = screenPos % maxX;
+        
+        if (y < maxY) {
+            // Print space with same color scheme
+            cchar_t wc = {};
+            wc.chars[0] = L' ';
+            
+            // Use last color pair for spaces
+            int colorPair = _numColorPairs;
+            if (colorPair < 1) colorPair = 1;
+            
+            if (_colorMode != ColorMode::MONO) {
+                attron(COLOR_PAIR(colorPair));
+                mvadd_wch(y, x, &wc);
+                attroff(COLOR_PAIR(colorPair));
+            } else {
+                mvadd_wch(y, x, &wc);
+            }
+            
+            screenPos++;
+            spaceCount++;
+            
+            // After 200 spaces, reset character printing
+            if (spaceCount >= 200) {
+                spaceCount = 0;
+                charIndex = 0;
+            }
+        }
+    } else {
+        // Screen is completely covered, clear and start over
+        clear();
+        screenPos = 0;
+        spaceCount = 0;
+        charIndex = 0;
     }
-
-    // Bookkeeping logic for glitching and drawing
-    if (timeForGlitch) {
-        _lastGlitchTime = curTime;
-        _nextGlitchTime = _lastGlitchTime + milliseconds(_randGlitchMs(mt));
-    }
+    
+    refresh();
     _forceDrawEverything = false;
 }
 
