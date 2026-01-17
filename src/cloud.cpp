@@ -52,69 +52,68 @@ void Cloud::Rain() {
     static size_t screenPos = 0;
     static size_t spaceCount = 0;
     static vector<wchar_t> allChars;
-    
+
     if (!initialized) {
         clear();
-        
+
         // Create our own character set with a wide range of Unicode characters
         // Basic Latin: ! to ~ (33-126)
         for (wchar_t c = 33; c <= 126; c++) {
             allChars.push_back(c);
         }
-        
+
         // Latin Extended-A (some common characters)
         for (wchar_t c = 0xC0; c <= 0xFF; c++) {
             allChars.push_back(c);
         }
-        
+
         // Greek (0370-03FF)
         for (wchar_t c = 0x0370; c <= 0x03FF; c++) {
             allChars.push_back(c);
         }
-        
+
         // Cyrillic (0410-044F)
         for (wchar_t c = 0x0410; c <= 0x044F; c++) {
             allChars.push_back(c);
         }
-        
+
         // Katakana (FF64-FF9F)
         for (wchar_t c = 0xFF64; c <= 0xFF9F; c++) {
             allChars.push_back(c);
         }
-        
+
         // Box drawing characters (2500-257F)
         for (wchar_t c = 0x2500; c <= 0x257F; c++) {
             allChars.push_back(c);
         }
-        
+
         // Block elements (2580-259F)
         for (wchar_t c = 0x2580; c <= 0x259F; c++) {
             allChars.push_back(c);
         }
-        
+
         initialized = true;
     }
 
     // Get screen dimensions
     int maxY, maxX;
     getmaxyx(stdscr, maxY, maxX);
-    
+
     // If we have characters available
     if (charIndex < allChars.size()) {
         // Calculate position
         int y = screenPos / maxX;
         int x = screenPos % maxX;
-        
+
         if (y < maxY) {
-            // Use color pair 5 (bright green from the default GREEN scheme)
-            // or cycle through available color pairs
-            int colorPair = (charIndex % _numColorPairs) + 1;
-            if (colorPair > _numColorPairs) colorPair = _numColorPairs;
-            
+            // Use color pairs 2-7 (skip the darkest green which is almost invisible)
+            // Cycle through available color pairs, starting from 2
+            int colorPair = (charIndex % (_numColorPairs - 1)) + 2;
+
             // Create wide character
             cchar_t wc = {};
             wc.chars[0] = allChars[charIndex];
-            
+
             // Apply color and bold attribute
             if (_colorMode != ColorMode::MONO) {
                 attron(COLOR_PAIR(colorPair) | A_BOLD);
@@ -125,10 +124,10 @@ void Cloud::Rain() {
                 mvadd_wch(y, x, &wc);
                 attroff(A_BOLD);
             }
-            
+
             charIndex++;
             screenPos++;
-            
+
             // Note: Don't reset charIndex here - we need to print spaces after all chars
         } else {
             // Screen is full, clear and start over
@@ -140,16 +139,16 @@ void Cloud::Rain() {
         // Print spaces after all characters
         int y = screenPos / maxX;
         int x = screenPos % maxX;
-        
+
         if (y < maxY) {
             // Print space with same color scheme
             cchar_t wc = {};
             wc.chars[0] = L' ';
-            
-            // Use last color pair for spaces
+
+            // Use last color pair for spaces (skip the darkest)
             int colorPair = _numColorPairs;
-            if (colorPair < 1) colorPair = 1;
-            
+            if (colorPair < 2) colorPair = 1; // Fallback if only one color pair
+
             if (_colorMode != ColorMode::MONO) {
                 attron(COLOR_PAIR(colorPair));
                 mvadd_wch(y, x, &wc);
@@ -157,14 +156,15 @@ void Cloud::Rain() {
             } else {
                 mvadd_wch(y, x, &wc);
             }
-            
+
             screenPos++;
             spaceCount++;
-            
+
             // After 200 spaces, reset character printing
             if (spaceCount >= 200) {
                 spaceCount = 0;
                 charIndex = 0;
+                screenPos = (screenPos / maxX) * maxX;
             }
         }
     } else {
@@ -174,7 +174,7 @@ void Cloud::Rain() {
         spaceCount = 0;
         charIndex = 0;
     }
-    
+
     refresh();
     _forceDrawEverything = false;
 }
