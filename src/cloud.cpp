@@ -56,40 +56,31 @@ void Cloud::Rain() {
     if (!initialized) {
         clear();
 
-        // Create our own character set with a wide range of Unicode characters
-        // Basic Latin: ! to ~ (33-126)
-        for (wchar_t c = 33; c <= 126; c++) {
-            allChars.push_back(c);
-        }
+        // Use the same character ranges as defined in InitChars()
+        vector<pair<wchar_t, wchar_t>> unicodeRanges = {
+            {48, 57}, // ENGLISH_DIGITS
+            {65, 90}, {97, 122}, // ENGLISH_LETTERS
+            {33, 47}, {58, 64}, {91, 96}, {123, 126}, // ENGLISH_PUNCTUATION
+            {0xFF64, 0xFF9F}, // KATAKANA
+            {0x0390, 0x03DF}, {0x03EF, 0x03FF}, // GREEK
+            //
+            {0x0411, 0x0411}, {0x0413, 0x0414}, {0x0416, 0x0416},
+            {0x0418, 0x0419}, {0x041B, 0x041B}, {0x041F, 0x041F},
+            {0x0421, 0x0424}, {0x0426, 0x042f}, {0x0431, 0x0434},
+            {0x0436, 0x043f}, {0x0442, 0x044F}, // CYRILLIC
+            //
+            // {0x0627, 0x0649}, // ARABIC
+            // {0x0590, 0x05FF}, {0xFB1D, 0xFB4F}, // HEBREW
+            {0x0906, 0x0938}, // DEVANAGARI
+            {0x0968, 0x097F}, // DEVANAGARI
+            {0x2800, 0x28FF}, // BRAILLE
+            {0x16A7, 0x16FF}, // RUNIC
+        };
 
-        // Latin Extended-A (some common characters)
-        for (wchar_t c = 0xC0; c <= 0xFF; c++) {
-            allChars.push_back(c);
-        }
-
-        // Greek (0370-03FF)
-        for (wchar_t c = 0x0370; c <= 0x03FF; c++) {
-            allChars.push_back(c);
-        }
-
-        // Cyrillic (0410-044F)
-        for (wchar_t c = 0x0410; c <= 0x044F; c++) {
-            allChars.push_back(c);
-        }
-
-        // Katakana (FF64-FF9F)
-        for (wchar_t c = 0xFF64; c <= 0xFF9F; c++) {
-            allChars.push_back(c);
-        }
-
-        // Box drawing characters (2500-257F)
-        for (wchar_t c = 0x2500; c <= 0x257F; c++) {
-            allChars.push_back(c);
-        }
-
-        // Block elements (2580-259F)
-        for (wchar_t c = 0x2580; c <= 0x259F; c++) {
-            allChars.push_back(c);
+        for (const auto& range : unicodeRanges) {
+            for (wchar_t c = range.first; c <= range.second; c++) {
+                allChars.push_back(c);
+            }
         }
 
         initialized = true;
@@ -98,6 +89,8 @@ void Cloud::Rain() {
     // Get screen dimensions
     int maxY, maxX;
     getmaxyx(stdscr, maxY, maxX);
+
+    maxX = 60;
 
     // If we have characters available
     if (charIndex < allChars.size()) {
