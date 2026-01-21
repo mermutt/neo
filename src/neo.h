@@ -43,6 +43,8 @@ enum class Charset : unsigned {
     DEVANAGARI = 0x400,
     BRAILLE = 0x800,
     RUNIC = 0x1000,
+    BOX_DRAWING = 0x2000,
+    BLOCK_ELEMENTS = 0x4000,
     DEFAULT = 0x7,
     EXTENDED_DEFAULT = 0xE,
 };

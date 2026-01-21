@@ -158,19 +158,17 @@ void Cloud::InitChars() {
         _charset = _defaultToAscii ? Charset::DEFAULT : Charset::EXTENDED_DEFAULT;
     }
     vector<UnicodeRange> unicodeRanges = {
-        { Charset::BINARY, {{48, 49}} },
-        { Charset::HEX, {{48, 57}, {65, 70}} },
-        { Charset::ENGLISH_LETTERS, {{65, 90}, {97, 122}} },
         { Charset::ENGLISH_DIGITS, {{48, 57}} },
+        { Charset::ENGLISH_LETTERS, {{65, 90}, {97, 122}} },
         { Charset::ENGLISH_PUNCTUATION, {{33, 47}, {58, 64}, {91, 96}, {123, 126}} },
-        { Charset::KATAKANA, {{L'\uFF64', L'\uFF9F'}} },
-        { Charset::GREEK, {{L'\u0370', L'\u03FF'}} },
-        { Charset::CYRILLIC, {{L'\u0410', L'\u044F'}} },
-        { Charset::ARABIC, {{L'\u0627', L'\u0649'}} },
-        { Charset::HEBREW, {{L'\u0590', L'\u05FF'}, {L'\uFB1D', L'\uFB4F'}} },
-        { Charset::DEVANAGARI, {{L'\u0900', L'\u097F'}} },
-        { Charset::BRAILLE, {{L'\u2800', L'\u28FF'}} },
-        { Charset::RUNIC, {{L'\u16A0', L'\u16FF'}} },
+        { Charset::KATAKANA, {{0xFF64, 0xFF9F}} },
+        { Charset::GREEK, {{0x0394, 0x0394}, {0x039E, 0x039E}, {0x03A3, 0x03A3}, {0x03A6, 0x03A6}, {0x03A8, 0x03A8}, {0x03A9, 0x03BA}, {0x03BC, 0x03BD}, {0x03D0, 0x03D1}, {0x03D4, 0x03DF}, {0x03EF, 0x03F1}, {0x03F5, 0x03F5}, {0x03F7, 0x03FF}} },
+        { Charset::CYRILLIC, {{0x0411, 0x0411}, {0x0413, 0x0414}, {0x0416, 0x0416}, {0x0418, 0x0419}, {0x041B, 0x041B}, {0x041F, 0x041F}, {0x0423, 0x0424}, {0x0426, 0x042f}, {0x0431, 0x0434}, {0x0436, 0x0439}, {0x043b, 0x043d}, {0x043f, 0x043f}, {0x0442, 0x0444}, {0x0446, 0x044F}} },
+        { Charset::DEVANAGARI, {{0x0906, 0x090f}, {0x0920, 0x0938}, {0x0968, 0x0970}, {0x0978, 0x097F}} },
+        { Charset::BRAILLE, {{0x2820, 0x28FF}} },
+        { Charset::RUNIC, {{0x16A7, 0x16DF}, {0x16E1, 0x16F7}} },
+        { Charset::BOX_DRAWING, {{0x2510, 0x2510}, {0x2514, 0x2514}, {0x2518, 0x2518}, {0x251C, 0x251C}, {0x2520, 0x2520}, {0x2524, 0x2524}, {0x2528, 0x2528}, {0x252C, 0x252C}, {0x254C, 0x257F}} },
+        { Charset::BLOCK_ELEMENTS, {{0x2580, 0x259F}} },
     };
     size_t numRanges = unicodeRanges.size();
     for (size_t range = 0; range < numRanges; range++) {
