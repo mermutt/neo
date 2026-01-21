@@ -58,67 +58,50 @@ void Cloud::Rain() {
 
         // Use the same character ranges as defined in InitChars()
         vector<pair<wchar_t, wchar_t>> unicodeRanges = {
-            {48, 57},                           // ENGLISH_DIGITS           0-9
-            {65, 90}, {97, 122},                // ENGLISH_LETTERS          10-35, 36-61
+            {48, 57},                           // ENGLISH_DIGITS
+            {65, 90}, {97, 122},                // ENGLISH_LETTERS
 
-            {33, 47}, {58, 64},                 // ENGLISH_PUNCTUATION      62-76, 77-83
-            {91, 96}, {123, 126},               // ENGLISH_PUNCTUATION      84-89, 90-93
+            {33, 47}, {58, 64},                 // ENGLISH_PUNCTUATION
+            {91, 96}, {123, 126},               // ENGLISH_PUNCTUATION
 
-            {0xFF64, 0xFF9F},                   // KATAKANA                 94-153
+            {0xFF64, 0xFF9F},                   // KATAKANA
 
             {0x0394, 0x0394},
-            {0x039E, 0x039E}, {0x03A3, 0x03A3}, // GREEK                    156-156, 157-157
-            {0x03A6, 0x03A6}, {0x03A8, 0x03A8}, // GREEK                    158-158, 159-159
-            {0x03A9, 0x03BA}, {0x03BC, 0x03BD}, // GREEK                    160-177, 178-179
-            {0x03CF, 0x03DF}, {0x03EF, 0x03F1}, // GREEK                    180-196, 197-213
-            {0x03F5, 0x03F5}, {0x03F7, 0x03FF}, // GREEK                    180-196, 197-213
+            {0x039E, 0x039E}, {0x03A3, 0x03A3}, // GREEK
+            {0x03A6, 0x03A6}, {0x03A8, 0x03A8}, // GREEK
+            {0x03A9, 0x03BA}, {0x03BC, 0x03BD}, // GREEK
+            {0x03D0, 0x03D1}, {0x03D4, 0x03DF}, // GREEK
+            {0x03EF, 0x03F1}, {0x03F5, 0x03F5}, // GREEK
+            {0x03F7, 0x03FF}, 					// GREEK
 
-            {0x0411, 0x0411}, {0x0413, 0x0414}, // CYRILLIC                 214-214, 215-216
-            {0x0416, 0x0416}, {0x0418, 0x0419}, // CYRILLIC                 217-217, 218-219
-            {0x041B, 0x041B}, {0x041F, 0x041F}, // CYRILLIC                 220-220, 221-221
-            {0x0423, 0x0424}, {0x0426, 0x042f}, // CYRILLIC                 222-225, 226-235
-            {0x0431, 0x0434}, {0x0436, 0x0439}, // CYRILLIC                 236-239, 240-249
-            {0x043b, 0x043d}, {0x043f, 0x043f}, // CYRILLIC                 236-239, 240-249
+            {0x0411, 0x0411}, {0x0413, 0x0414}, // CYRILLIC
+            {0x0416, 0x0416}, {0x0418, 0x0419}, // CYRILLIC
+            {0x041B, 0x041B}, {0x041F, 0x041F}, // CYRILLIC
+            {0x0423, 0x0424}, {0x0426, 0x042f}, // CYRILLIC
+            {0x0431, 0x0434}, {0x0436, 0x0439}, // CYRILLIC
+            {0x043b, 0x043d}, {0x043f, 0x043f}, // CYRILLIC
             {0x0442, 0x0444}, {0x0446, 0x044F}, // CYRILLIC
 
-            {0x0906, 0x090f},                   // DEVANAGARI               264-271
-            {0x0920, 0x0938},                   // DEVANAGARI               272-290
-            {0x0968, 0x0970},                   // DEVANAGARI               291-299
-            {0x0978, 0x097F},                   // DEVANAGARI               300-307
+            {0x0906, 0x090f},                   // DEVANAGARI
+            {0x0920, 0x0938},                   // DEVANAGARI
+            {0x0968, 0x0970},                   // DEVANAGARI
+            {0x0978, 0x097F},                   // DEVANAGARI
 
-            {0x2820, 0x28FF},                   // BRAILLE                  308-531
+            {0x2820, 0x28FF},                   // BRAILLE
 
-            {0x16A7, 0x16DF},                   // RUNIC                    532-564
-            {0x16E1, 0x16F7},                   // RUNIC                    565-597
+            {0x16A7, 0x16DF},                   // RUNIC
+            {0x16E1, 0x16F7},                   // RUNIC
 
             {0x2510, 0x2510},
-            {0x2512, 0x2512},
             {0x2514, 0x2514},
-            {0x2516, 0x2516},
             {0x2518, 0x2518},
-            {0x251a, 0x251a},
             {0x251c, 0x251c},
-            {0x251e, 0x251e},
             {0x2520, 0x2520},
-            {0x2522, 0x2522},
             {0x2524, 0x2524},
-            {0x2526, 0x2526},
             {0x2528, 0x2528},
-            {0x252a, 0x252a},
             {0x252c, 0x252c},
-            {0x252e, 0x252e},
-            {0x2530, 0x2530},
-            {0x2532, 0x2532},
-            {0x2534, 0x2534},
-            {0x2536, 0x2536},
-            {0x2538, 0x2538},
-            {0x253a, 0x253a},
-            {0x253c, 0x253c},
-            {0x253e, 0x253e},
-            {0x2540, 0x2540},
-            {0x2542, 0x2542},
-            {0x2543, 0x257F},                   // BOX_DRAWING              598-709
-            {0x2580, 0x259F},                   // BLOCK_ELEMENTS           710-741
+            {0x254a, 0x257F},                   // BOX_DRAWING
+            {0x2580, 0x259F},                   // BLOCK_ELEMENTS
         };
 
         for (const auto& range : unicodeRanges) {
