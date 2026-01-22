@@ -31,6 +31,12 @@
 #include <random>
 #include <thread>
 #include <utility>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <dirent.h>
+#include <algorithm>
 
 #ifdef __APPLE__
     #define _XOPEN_SOURCE_EXTENDED 1
@@ -243,11 +249,6 @@ void HandleInput(Cloud* pCloud) {
         exit(0);
     }
     switch (ch) {
-        case KEY_RESIZE:
-        case ' ':
-            pCloud->Reset();
-            pCloud->ForceDrawEverything();
-            break;
         case 'a':
             pCloud->SetAsync(!pCloud->GetAsync());
             pCloud->SetColumnSpeeds();
@@ -273,24 +274,6 @@ void HandleInput(Cloud* pCloud) {
             else
                 cps -= 1.0f;
             pCloud->SetCharsPerSec(cps);
-            break;
-        }
-        case KEY_LEFT: {
-            if (pCloud->GetGlitchy()) {
-                float gpct = pCloud->GetGlitchPct();
-                gpct -= 0.05f;
-                gpct = max(gpct, 0.0f);
-                pCloud->SetGlitchPct(gpct);
-            }
-            break;
-        }
-        case KEY_RIGHT: {
-            if (pCloud->GetGlitchy()) {
-                float gpct = pCloud->GetGlitchPct();
-                gpct += 0.05f;
-                gpct = min(gpct, 1.0f);
-                pCloud->SetGlitchPct(gpct);
-            }
             break;
         }
         case '\t': {
@@ -381,6 +364,71 @@ void PrintVersion() {
     exit(0);
 }
 
+// Find the latest file in a directory
+static string FindLatestFile(const string& directory) {
+    DIR* dir = opendir(directory.c_str());
+    if (!dir) {
+        return "";
+    }
+
+    string latestFile;
+    time_t latestTime = 0;
+    struct dirent* entry;
+
+    while ((entry = readdir(dir)) != nullptr) {
+        if (entry->d_name[0] == '.') {
+            continue; // Skip hidden files
+        }
+
+        string fullPath = directory + "/" + entry->d_name;
+        struct stat fileStat;
+        if (stat(fullPath.c_str(), &fileStat) == 0) {
+            if (S_ISREG(fileStat.st_mode)) {
+                if (fileStat.st_mtime > latestTime) {
+                    latestTime = fileStat.st_mtime;
+                    latestFile = fullPath;
+                }
+            }
+        }
+    }
+
+    closedir(dir);
+    return latestFile;
+}
+
+// Memory map a file
+static pair<const char*, size_t> MemoryMapFile(const string& filename) {
+    if (filename.empty()) {
+        return {nullptr, 0};
+    }
+
+    int fd = open(filename.c_str(), O_RDONLY);
+    if (fd == -1) {
+        return {nullptr, 0};
+    }
+
+    struct stat fileStat;
+    if (fstat(fd, &fileStat) == -1) {
+        close(fd);
+        return {nullptr, 0};
+    }
+
+    size_t fileSize = fileStat.st_size;
+    if (fileSize == 0) {
+        close(fd);
+        return {nullptr, 0};
+    }
+
+    void* mapped = mmap(nullptr, fileSize, PROT_READ, MAP_PRIVATE, fd, 0);
+    close(fd);
+
+    if (mapped == MAP_FAILED) {
+        return {nullptr, 0};
+    }
+
+    return {static_cast<const char*>(mapped), fileSize};
+}
+
 void PrintHelp(bool bErr, const char* appName) {
     FILE* f = bErr ? stderr : stdout;
     if (!appName || appName[0] == '\0')
@@ -399,12 +447,9 @@ void PrintHelp(bool bErr, const char* appName) {
     fprintf(f, "  -d, --density=NUM      set the density of droplets\n");
     fprintf(f, "  -F, --fullwidth        use two columns per character\n");
     fprintf(f, "  -f, --fps=NUM          set the frames per second target/limit\n");
-    fprintf(f, "  -G, --glitchpct=NUM    set the percentage of screen chars that glitch\n");
-    fprintf(f, "  -g, --glitchms=NUM1,2  control how often characters glitch\n");
     fprintf(f, "  -h, --help             show this help message\n");
     fprintf(f, "  -l, --lingerms=NUM1,2  control how long characters linger after scrolling\n");
     fprintf(f, "  -M, --shadingmode=NUM  set the shading mode\n");
-    fprintf(f, "  -m, --message=STR      display a message\n");
     fprintf(f, "  -p, --profile          enable profiling mode\n");
     fprintf(f, "  -r, --rippct=NUM       set the percentage of droplets that die early\n");
     fprintf(f, "  -S, --speed=NUM        set the scroll speed in chars per second\n");
@@ -414,7 +459,6 @@ void PrintHelp(bool bErr, const char* appName) {
     fprintf(f, "      --charset=STR      set the character set\n");
     fprintf(f, "      --colormode=NUM    set the color mode\n");
     fprintf(f, "      --maxdpc=NUM       set the maximum droplets per column\n");
-    fprintf(f, "      --noglitch         disable character glitching\n");
     fprintf(f, "      --shortpct=NUM     set the percentage of shortened droplets\n");
     fprintf(f, "\n");
     fprintf(f, "See the manual page for more info: man neo\n");
@@ -427,7 +471,6 @@ enum LongOpts {
     CHARSET,
     COLORMODE,
     MAXDPC,
-    NOGLITCH,
     SHORTPCT,
 };
 
@@ -443,13 +486,9 @@ static constexpr option long_options[] = {
     { "density",     required_argument, nullptr, 'd' },
     { "fps",         required_argument, nullptr, 'f' },
     { "fullwidth",   no_argument,       nullptr, 'F' },
-    { "glitchms",    required_argument, nullptr, 'g' },
-    { "glitchpct",   required_argument, nullptr, 'G' },
     { "help",        no_argument,       nullptr, 'h' },
     { "lingerms",    required_argument, nullptr, 'l' },
     { "maxdpc",      required_argument, nullptr, LongOpts::MAXDPC },
-    { "message",     required_argument, nullptr, 'm' },
-    { "noglitch",    no_argument,       nullptr, LongOpts::NOGLITCH },
     { "screensaver", no_argument,       nullptr, 's' },
     { "shadingmode", required_argument, nullptr, 'M' },
     { "profile",     no_argument,       nullptr, 'p' },
@@ -511,46 +550,6 @@ void ParseArgs(int argc, char* argv[], Cloud* pCloud, double* targetFPS, bool* p
 
     while ((opt = getopt_long(argc, argv, optstring, long_options, nullptr)) != -1) {
         switch (opt) {
-        case LongOpts::CHARSET: {
-            if (strcasecmp(optarg, "ascii") == 0) {
-                pCloud->SetCharset(Charset::DEFAULT);
-            } else if (strcasecmp(optarg, "extended") == 0) {
-                pCloud->SetCharset(Charset::EXTENDED_DEFAULT);
-            } else if (strcasecmp(optarg, "english") == 0) {
-                pCloud->SetCharset(Charset::ENGLISH_LETTERS);
-            } else if (strcasecmp(optarg, "digits") == 0 ||
-                       strcasecmp(optarg, "dec") == 0 ||
-                       strcasecmp(optarg, "decimal") == 0) {
-                pCloud->SetCharset(Charset::ENGLISH_DIGITS);
-            } else if (strcasecmp(optarg, "punc") == 0) {
-                pCloud->SetCharset(Charset::ENGLISH_PUNCTUATION);
-            } else if (strcasecmp(optarg, "bin") == 0 ||
-                       strcasecmp(optarg, "binary") == 0) {
-                pCloud->SetCharset(Charset::BINARY);
-            } else if (strcasecmp(optarg, "hex") == 0 ||
-                       strcasecmp(optarg, "hexadecimal") == 0) {
-                pCloud->SetCharset(Charset::HEX);
-            } else if (strcasecmp(optarg, "katakana") == 0) {
-                pCloud->SetCharset(Charset::KATAKANA);
-            } else if (strcasecmp(optarg, "greek") == 0) {
-                pCloud->SetCharset(Charset::GREEK);
-            } else if (strcasecmp(optarg, "cyrillic") == 0) {
-                pCloud->SetCharset(Charset::CYRILLIC);
-            } else if (strcasecmp(optarg, "arabic") == 0) {
-                pCloud->SetCharset(Charset::ARABIC);
-            } else if (strcasecmp(optarg, "hebrew") == 0) {
-                pCloud->SetCharset(Charset::HEBREW);
-            } else if (strcasecmp(optarg, "devanagari") == 0) {
-                pCloud->SetCharset(Charset::DEVANAGARI);
-            } else if (strcasecmp(optarg, "braille") == 0) {
-                pCloud->SetCharset(Charset::BRAILLE);
-            } else if (strcasecmp(optarg, "runic") == 0) {
-                pCloud->SetCharset(Charset::RUNIC);
-            } else {
-                Die("Unsupported charset specified: %s\n", optarg);
-            }
-            break;
-        }
         case 'a':
             pCloud->SetAsync(true);
             pCloud->SetColumnSpeeds();
@@ -630,28 +629,6 @@ void ParseArgs(int argc, char* argv[], Cloud* pCloud, double* targetFPS, bool* p
             pCloud->SetFullWidth();
             break;
         }
-        case 'g': {
-            char* nextStr;
-            const long int low_ms = strtol(optarg, &nextStr, 10);
-            if (!nextStr || *nextStr == '\0' || *(nextStr+1) == '\0')
-                Die("Invalid -g/--glitchms option\n");
-
-            nextStr++;
-            const long int high_ms = strtol(nextStr, nullptr, 10);
-            if (low_ms <= 0 || high_ms <= 0 || low_ms > high_ms || high_ms > 0xFFFFU)
-                Die("Invalid -g/--glitchms option\n");
-
-            pCloud->SetGlitchTimes(static_cast<uint16_t>(low_ms), static_cast<uint16_t>(high_ms));
-            break;
-        }
-        case 'G': {
-            const float gpct = atof(optarg);
-            if (gpct < 0.0f || gpct > 100.0f)
-                Die("-G/--glitchpct must be between 0 and 100.0 inclusive\n");
-
-            pCloud->SetGlitchPct(gpct / 100.0f);
-            break;
-        }
         case 'h':
             Cleanup();
             PrintHelp(false, argv[0]);
@@ -680,9 +657,6 @@ void ParseArgs(int argc, char* argv[], Cloud* pCloud, double* targetFPS, bool* p
             pCloud->SetShadingMode(sm);
             break;
         }
-        case 'm':
-            pCloud->SetMessage(optarg);
-            break;
         case 'p':
             *profiling = true;
             break;
@@ -711,17 +685,6 @@ void ParseArgs(int argc, char* argv[], Cloud* pCloud, double* targetFPS, bool* p
             Cleanup();
             PrintVersion();
             break;
-        case LongOpts::CHARS: {
-            vector<wchar_t> uniChars = ParseUserChars(optarg);
-            const size_t numChars = uniChars.size();
-            if (numChars % 2)
-                Die("--chars: odd number of unicode chars given (must be even)\n");
-
-            for (size_t chIdx = 0; chIdx < numChars; chIdx += 2) {
-                pCloud->AddChars(uniChars[chIdx], uniChars[chIdx+1]);
-            }
-            break;
-        }
         case LongOpts::COLORMODE:
             break; // handled by ParseArgsEarly()
         case LongOpts::MAXDPC: {
@@ -732,11 +695,6 @@ void ParseArgs(int argc, char* argv[], Cloud* pCloud, double* targetFPS, bool* p
             pCloud->SetMaxDropletsPerColumn(static_cast<uint8_t>(maxdpc));
             break;
         }
-        case LongOpts::NOGLITCH:
-            pCloud->SetGlitchy(false);
-            pCloud->SetGlitchPct(0.0f);
-            pCloud->SetGlitchTimes(0xFFFFU, 0xFFFFU);
-            break;
         case LongOpts::SHORTPCT: {
             const float pct = atof(optarg);
             if (pct < 0.0f || pct > 100.0f)
@@ -787,13 +745,9 @@ void Profiler(Cloud& cloud) {
 }
 
 void MainLoop(Cloud& cloud, double targetFPS) {
-    const nanoseconds targetPeriod(static_cast<uint64_t>(round(1.0 / targetFPS * 1.0e9)));
-    high_resolution_clock::time_point prevTime = high_resolution_clock::now();
-    high_resolution_clock::time_point curTime;
-    nanoseconds elapsed;
-    nanoseconds prevDelay(5);
-    nanoseconds curDelay;
-    nanoseconds calcDelay;
+    // Use fixed 30 FPS for logical time mode
+    const uint64_t targetPeriodMs = static_cast<uint64_t>(1000.0 / 30.0); // ~33ms for 30 FPS
+    auto prevTime = high_resolution_clock::now();
 
     while (cloud.Raining()) {
         HandleInput(&cloud);
@@ -801,17 +755,13 @@ void MainLoop(Cloud& cloud, double targetFPS) {
         if (refresh() != OK)
             Die("refresh() failed\n");
 
-        curTime = high_resolution_clock::now();
-        elapsed = duration_cast<nanoseconds>(curTime - prevTime);
-        if (elapsed >= targetPeriod) {
-            calcDelay = nanoseconds(0);
-        } else {
-            calcDelay = nanoseconds(targetPeriod - elapsed);
+        // Sleep to maintain ~30 FPS
+        auto curTime = high_resolution_clock::now();
+        auto elapsed = duration_cast<milliseconds>(curTime - prevTime);
+        if (elapsed.count() < targetPeriodMs) {
+            std::this_thread::sleep_for(milliseconds(targetPeriodMs - elapsed.count()));
         }
-        curDelay = (7 * prevDelay + calcDelay) / 8;
-        std::this_thread::sleep_for(curDelay);
-        prevTime = curTime;
-        prevDelay = curDelay;
+        prevTime = high_resolution_clock::now();
     }
 }
 
@@ -834,6 +784,22 @@ int main(int argc, char* argv[]) {
     bool profiling = false;
     Cloud cloud(colorMode, ascii);
     ParseArgs(argc, argv, &cloud, &targetFPS, &profiling);
+
+    // Find and memory map the latest file in ~/prjs/snapshots/
+    const char* homeDir = getenv("HOME");
+    string latestFile;
+    if (homeDir) {
+        string snapshotDir = string(homeDir) + "/prjs/snapshots";
+        latestFile = FindLatestFile(snapshotDir);
+    }
+
+    if (!latestFile.empty()) {
+        pair<const char*, size_t> mmapResult = MemoryMapFile(latestFile);
+        if (mmapResult.first && mmapResult.second > 0) {
+            cloud.SetMemoryMappedFile(mmapResult.first, mmapResult.second);
+        }
+    }
+
     cloud.InitChars();
     cloud.Reset();
 
@@ -843,6 +809,11 @@ int main(int argc, char* argv[]) {
         MainLoop(cloud, targetFPS);
 
     Cleanup();
+
+    // Clean up memory mapped file if any
+    if (cloud.GetMemoryMappedData()) {
+        munmap(const_cast<char*>(cloud.GetMemoryMappedData()), cloud.GetMemoryMappedSize());
+    }
 
     return 0;
 }

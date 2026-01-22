@@ -6,6 +6,8 @@ neo_SOURCES = \
     droplet.h \
     cloud.h \
     neo.h \
+    log.h \
+    log.cpp \
     cloud.cpp \
     droplet.cpp \
     neo.cpp

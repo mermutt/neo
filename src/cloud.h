@@ -27,6 +27,11 @@
 
 #include <random>
 #include <vector>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <dirent.h>
 
 #ifdef __APPLE__
     #define _XOPEN_SOURCE_EXTENDED 1
@@ -43,6 +48,7 @@ using namespace std;
 class Cloud {
 public:
     Cloud(ColorMode cm, bool def2ascii); // Must be called *AFTER* InitCurses
+    Cloud(const Cloud& other); // Copy constructor for simulation
 
     enum class ShadingMode : unsigned {
         RANDOM,
@@ -57,6 +63,8 @@ public:
     };
 
     void Rain();
+    uint32_t SimulateEpoch();
+    void EpochNotch(uint64_t curTimeMs = 0);
     void Reset();
 
     struct CharAttr {
@@ -64,20 +72,20 @@ public:
         bool isBold;
     };
     void GetAttr(uint16_t line, uint16_t col, wchar_t val, Droplet::CharLoc ct,
-                 CharAttr* pAttr, high_resolution_clock::time_point time,
+                 CharAttr* pAttr, uint64_t timeMs,
                  uint16_t headPutLine, uint16_t len) const;
 
     float GetCharsPerSec() const { return _charsPerSec; }
     void SetCharsPerSec(float cps);
-    wchar_t GetChar(uint16_t line, uint16_t charPoolIdx) const;
-    bool IsGlitched(uint16_t line, uint16_t col) const;
+    wchar_t GetChar(uint16_t line, uint16_t charPoolIdx, uint16_t dataOffset) const;
+    void SetMemoryMappedFile(const char* data, size_t size);
+    const char* GetMemoryMappedData() const { return _mmapData; }
+    size_t GetMemoryMappedSize() const { return _mmapSize; }
 
     static constexpr size_t CHAR_POOL_SIZE = 2048;
-    static constexpr size_t GLITCH_POOL_SIZE = 1024;
 
-    void ForceDrawEverything() { _forceDrawEverything = true; }
     ShadingMode GetShadingMode() const { return _shadingMode; }
-    void SetShadingMode(ShadingMode sm) { _shadingMode = sm; ForceDrawEverything(); }
+    void SetShadingMode(ShadingMode sm) { _shadingMode = sm; }
     void TogglePause();
     Color GetColor() const { return _color; }
     void SetColor(Color c);
@@ -89,28 +97,22 @@ public:
     void SetAsync(bool b) { _async = b; }
     void SetColumnSpeeds();
     void UpdateDropletSpeeds();
-    void SetCharset(Charset a) { _charset = a; }
-    void AddChars(wchar_t begin, wchar_t end);
     void InitChars();
     bool Raining() { return _raining; }
     void SetRaining(bool b) { _raining = b; }
     void SetBoldMode(BoldMode bm) { _boldMode = bm; }
-    float GetGlitchPct() const { return _glitchPct; }
-    void SetGlitchPct(float pct);
-    void SetGlitchTimes(uint16_t low_ms, uint16_t high_ms);
-    bool GetGlitchy() const { return _glitchy; }
-    void SetGlitchy(bool b) { _glitchy = b; }
     void SetShortPct(float pct) { _shortPct = pct; }
     void SetDieEarlyPct(float pct) { _dieEarlyPct = pct; }
     void SetLingerTimes(uint16_t low_ms, uint16_t high_ms);
 
-    void SetMessage(const char* msg);
     ColorMode GetColorMode() const { return _colorMode; }
     uint16_t GetLines() const { return _lines; }
     uint16_t GetCols() const { return _cols; }
     void SetColumnSpawn(uint16_t col, bool b);
     void SetMaxDropletsPerColumn(uint8_t val) { _maxDropletsPerColumn = val; }
     void SetUserColors(vector<ColorContent>&& vals) { _usrColors = std::move(vals); }
+
+    uint32_t CountDropletsAndChars();
 
 private:
     vector<Droplet> _droplets = {};
@@ -120,13 +122,7 @@ private:
     // we overrun some buffer.
     uint16_t _lines = 25;
     uint16_t _cols = 80;
-    Charset _charset = Charset::NONE;
-    vector<wchar_t> _chars = {}; // The chars that can be displayed
-    vector<wchar_t> _userChars = {}; // chars passed directly from the user
     vector<wchar_t> _charPool = {}; // Precomputed random chars
-    vector<wchar_t> _glitchPool = {}; // Precomputed random chars used for glitching
-    size_t _glitchPoolIdx = 0;
-    vector<bool> _glitchMap = {}; // Which screen positions are glitched
     vector<int> _colorPairMap = {}; // Color for each screen position
     float _dropletDensity = 1.0f; // How many columns should have droplets
     float _dropletsPerSec = 5.0f; // Number of droplets to spawn each second
@@ -137,13 +133,17 @@ private:
         bool canSpawn; // true if more droplets can be added to this column
     };
     vector<ColumnStatus> _colStat = {};
-    high_resolution_clock::time_point _lastGlitchTime = {};
-    high_resolution_clock::time_point _nextGlitchTime = {};
-    high_resolution_clock::time_point _pauseTime = {};
-    high_resolution_clock::time_point _lastSpawnTime = {};
+    uint64_t _pauseTimeMs = 0;
+    uint64_t _lastSpawnTimeMs = 0;
+    uint64_t _logicalTimeMs = 0;
+    static constexpr uint64_t _timeStepMs = 33; // Use logical time for deterministic behavior. 1000 / 30 ≈ 33.33ms
+    uint32_t _currentEpochSeed = 0;
+    uint32_t _lastEpochSeed = UINT32_MAX;
+    bool _currentEpochBool = false;
+    size_t _dropletsCurrentEpoch = 0;
+    size_t _dropletsPreviousEpoch = 0;
     float _charsPerSec = 8.0f; // Neo/Cypher scene is ~8.3333333f
     ShadingMode _shadingMode = ShadingMode::RANDOM;
-    bool _forceDrawEverything = false;
     bool _pause = false;
     bool _fullWidth = false;
     Color _color = Color::GREEN;
@@ -151,25 +151,14 @@ private:
     bool _async = false;
     bool _raining = true;
     BoldMode _boldMode = BoldMode::RANDOM;
-    float _glitchPct = 0.1f;
-    uint16_t _glitchLowMs = 300;
-    uint16_t _glitchHighMs = 400;
-    bool _glitchy = true;
     float _shortPct = 0.5f;
     float _dieEarlyPct = 0.3333333f;
     uint16_t _lingerLowMs = 1;
     uint16_t _lingerHighMs = 3000;
     uint8_t _maxDropletsPerColumn = 3;
     bool _defaultToAscii = false;
-
-    struct MsgChr {
-        explicit MsgChr(char v) : line(0), col(0), val(v), draw(false) {}
-        uint16_t line = 0;
-        uint16_t col = 0;
-        char val = '\0';
-        bool draw = false;
-    };
-    vector<MsgChr> _message = {};
+    bool _simulationMode = false;
+    uint32_t _nextEpochSeed = 0;
 
     // RNG stuff
     mt19937 mt {};
@@ -179,27 +168,22 @@ private:
     uniform_int_distribution<uint16_t> _randCpIdx {};
     uniform_int_distribution<uint16_t> _randLen {};
     uniform_int_distribution<uint16_t> _randCol {};
-    uniform_int_distribution<uint16_t> _randGlitchMs {};
     uniform_int_distribution<uint16_t> _randLingerMs {};
-    uniform_int_distribution<size_t> _randCharIdx {};
     uniform_real_distribution<float> _randSpeed {};
 
     ColorMode _colorMode = ColorMode::MONO;
     int _numColorPairs = 7;
     vector<ColorContent> _usrColors = {};
 
-    bool TimeForGlitch(high_resolution_clock::time_point time) const;
-    void DoGlitch(const Droplet& droplet);
-    bool IsBright(high_resolution_clock::time_point time) const;
-    bool IsDim(high_resolution_clock::time_point time) const;
+    // Memory mapped file support
+    const char* _mmapData = nullptr;
+    size_t _mmapSize = 0;
+    size_t _mmapOffset = 0;
+
     void FillDroplet(Droplet* pDroplet, uint16_t col);
 
-    void SpawnDroplets(high_resolution_clock::time_point curTime);
+    void SpawnDroplets(uint64_t curTimeMs);
     void FillColorMap(size_t screenSize);
-    void FillGlitchMap(size_t screenSize);
-    void ResetMessage();
-    void CalcMessage();
-    void DrawMessage() const;
 };
 
 #endif
