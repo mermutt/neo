@@ -127,6 +127,9 @@ private:
     high_resolution_clock::time_point _lastSpawnTime = {};
     uint32_t _currentEpochSeed = 0;
     uint32_t _lastEpochSeed = UINT32_MAX;
+    bool _currentEpochBool = false;
+    size_t _dropletsCurrentEpoch = 0;
+    size_t _dropletsPreviousEpoch = 0;
     float _charsPerSec = 8.0f; // Neo/Cypher scene is ~8.3333333f
     ShadingMode _shadingMode = ShadingMode::RANDOM;
     bool _forceDrawEverything = false;

@@ -25,7 +25,7 @@ Droplet::Droplet() {
 }
 
 Droplet::Droplet(Cloud* cl, uint16_t col, uint16_t endLine, uint16_t cpIdx,
-                 uint16_t len, float cps, milliseconds ttl) {
+                 uint16_t len, float cps, milliseconds ttl, bool epochBool) {
     Reset();
     _pCloud = cl;
     _boundCol = col;
@@ -34,6 +34,7 @@ Droplet::Droplet(Cloud* cl, uint16_t col, uint16_t endLine, uint16_t cpIdx,
     _length = len;
     _charsPerSec = cps;
     _timeToLinger = ttl;
+    _epochBool = epochBool;
 }
 
 void Droplet::Reset() {
@@ -53,6 +54,7 @@ void Droplet::Reset() {
     _lastTime = high_resolution_clock::time_point();
     _headStopTime = high_resolution_clock::time_point();
     _timeToLinger = milliseconds(0);
+    _epochBool = false;
 }
 
 void Droplet::Activate(high_resolution_clock::time_point curTime) {

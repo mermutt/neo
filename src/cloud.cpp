@@ -53,6 +53,15 @@ void Cloud::Rain() {
     _currentEpochSeed++;
 
     Epoch(_currentEpochSeed);
+
+    // Check if we should start a new epoch (after processing deaths)
+    if (_dropletsPreviousEpoch == 0) {
+        // All droplets from previous epoch are gone, flip the epoch bool
+        _currentEpochBool = !_currentEpochBool;
+        // Move current epoch droplets to previous epoch counter
+        _dropletsPreviousEpoch = _dropletsCurrentEpoch;
+        _dropletsCurrentEpoch = 0;
+    }
 }
 
 void Cloud::Epoch(uint32_t seed) {
@@ -75,6 +84,15 @@ void Cloud::Epoch(uint32_t seed) {
 
             if (droplet.GetTailPutLine() <= _lines / 4)
                 cs.canSpawn = true;
+
+            // Decrement the appropriate epoch counter
+            if (droplet.GetEpochBool() == _currentEpochBool) {
+                assert(_dropletsCurrentEpoch);
+                _dropletsCurrentEpoch--;
+            } else {
+                assert(_dropletsPreviousEpoch);
+                _dropletsPreviousEpoch--;
+            }
         }
     }
 
@@ -98,6 +116,11 @@ void Cloud::Reset() {
 
     // Reset all the RNG stuff
     _lastEpochSeed = UINT32_MAX;
+
+    // Reset epoch tracking
+    _currentEpochBool = false;
+    _dropletsCurrentEpoch = 0;
+    _dropletsPreviousEpoch = 0;
 
     int8_t lowPair, highPair;
     if (_numColorPairs < 3) {
@@ -185,7 +208,9 @@ void Cloud::FillDroplet(Droplet* pDroplet, uint16_t col) {
     if (endLine <= len)
         ttl = milliseconds(_randLingerMs(mt));
     const float speed = _colStat[col].maxSpeedPct * _charsPerSec;
-    *pDroplet = Droplet(this, col, endLine, cpIdx, len, speed, ttl);
+    *pDroplet = Droplet(this, col, endLine, cpIdx, len, speed, ttl, _currentEpochBool);
+    // Newly created droplets are always in the current epoch
+    _dropletsCurrentEpoch++;
 }
 
 void Cloud::GetAttr(uint16_t line, uint16_t col, wchar_t val, Droplet::CharLoc ct,

@@ -34,7 +34,7 @@ class Droplet {
 public:
     Droplet();
     Droplet(Cloud* cl, uint16_t col, uint16_t endLine, uint16_t cpIdx,
-            uint16_t len, float cps, milliseconds ttl);
+            uint16_t len, float cps, milliseconds ttl, bool epochBool);
 
     void Reset();
     void Activate(high_resolution_clock::time_point curTime);
@@ -48,6 +48,7 @@ public:
     uint16_t GetHeadPutLine() const { return _headPutLine; }
     uint16_t GetTailPutLine() const { return _tailPutLine; }
     uint16_t GetCharPoolIdx() const { return _charPoolIdx; }
+    bool GetEpochBool() const { return _epochBool; }
     void IncrementTime(milliseconds time); // To facilitate pausing
 
     enum class CharLoc { // describes where a char is within a Droplet
@@ -61,6 +62,7 @@ private:
     bool _isAlive; // Is this Droplet still displaying something?
     bool _isHeadCrawling; // Is the head (bottom) still moving?
     bool _isTailCrawling; // Is the tail (top) still moving?
+    bool _epochBool; // Which epoch this droplet was created in
     uint16_t _boundCol; // Which screen column this droplet renders to
     uint16_t _headPutLine; // Where we are advancing the head
     uint16_t _headCurLine; // Where the head currently is
