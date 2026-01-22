@@ -486,46 +486,6 @@ void ParseArgs(int argc, char* argv[], Cloud* pCloud, double* targetFPS, bool* p
 
     while ((opt = getopt_long(argc, argv, optstring, long_options, nullptr)) != -1) {
         switch (opt) {
-        case LongOpts::CHARSET: {
-            if (strcasecmp(optarg, "ascii") == 0) {
-                pCloud->SetCharset(Charset::DEFAULT);
-            } else if (strcasecmp(optarg, "extended") == 0) {
-                pCloud->SetCharset(Charset::EXTENDED_DEFAULT);
-            } else if (strcasecmp(optarg, "english") == 0) {
-                pCloud->SetCharset(Charset::ENGLISH_LETTERS);
-            } else if (strcasecmp(optarg, "digits") == 0 ||
-                       strcasecmp(optarg, "dec") == 0 ||
-                       strcasecmp(optarg, "decimal") == 0) {
-                pCloud->SetCharset(Charset::ENGLISH_DIGITS);
-            } else if (strcasecmp(optarg, "punc") == 0) {
-                pCloud->SetCharset(Charset::ENGLISH_PUNCTUATION);
-            } else if (strcasecmp(optarg, "bin") == 0 ||
-                       strcasecmp(optarg, "binary") == 0) {
-                pCloud->SetCharset(Charset::BINARY);
-            } else if (strcasecmp(optarg, "hex") == 0 ||
-                       strcasecmp(optarg, "hexadecimal") == 0) {
-                pCloud->SetCharset(Charset::HEX);
-            } else if (strcasecmp(optarg, "katakana") == 0) {
-                pCloud->SetCharset(Charset::KATAKANA);
-            } else if (strcasecmp(optarg, "greek") == 0) {
-                pCloud->SetCharset(Charset::GREEK);
-            } else if (strcasecmp(optarg, "cyrillic") == 0) {
-                pCloud->SetCharset(Charset::CYRILLIC);
-            } else if (strcasecmp(optarg, "arabic") == 0) {
-                pCloud->SetCharset(Charset::ARABIC);
-            } else if (strcasecmp(optarg, "hebrew") == 0) {
-                pCloud->SetCharset(Charset::HEBREW);
-            } else if (strcasecmp(optarg, "devanagari") == 0) {
-                pCloud->SetCharset(Charset::DEVANAGARI);
-            } else if (strcasecmp(optarg, "braille") == 0) {
-                pCloud->SetCharset(Charset::BRAILLE);
-            } else if (strcasecmp(optarg, "runic") == 0) {
-                pCloud->SetCharset(Charset::RUNIC);
-            } else {
-                Die("Unsupported charset specified: %s\n", optarg);
-            }
-            break;
-        }
         case 'a':
             pCloud->SetAsync(true);
             pCloud->SetColumnSpeeds();
@@ -664,17 +624,6 @@ void ParseArgs(int argc, char* argv[], Cloud* pCloud, double* targetFPS, bool* p
             Cleanup();
             PrintVersion();
             break;
-        case LongOpts::CHARS: {
-            vector<wchar_t> uniChars = ParseUserChars(optarg);
-            const size_t numChars = uniChars.size();
-            if (numChars % 2)
-                Die("--chars: odd number of unicode chars given (must be even)\n");
-
-            for (size_t chIdx = 0; chIdx < numChars; chIdx += 2) {
-                pCloud->AddChars(uniChars[chIdx], uniChars[chIdx+1]);
-            }
-            break;
-        }
         case LongOpts::COLORMODE:
             break; // handled by ParseArgsEarly()
         case LongOpts::MAXDPC: {

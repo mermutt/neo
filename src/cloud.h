@@ -57,6 +57,7 @@ public:
     };
 
     void Rain();
+    void Epoch(uint32_t seed);
     void Reset();
 
     struct CharAttr {
@@ -87,8 +88,6 @@ public:
     void SetAsync(bool b) { _async = b; }
     void SetColumnSpeeds();
     void UpdateDropletSpeeds();
-    void SetCharset(Charset a) { _charset = a; }
-    void AddChars(wchar_t begin, wchar_t end);
     void InitChars();
     bool Raining() { return _raining; }
     void SetRaining(bool b) { _raining = b; }
@@ -113,9 +112,6 @@ private:
     // we overrun some buffer.
     uint16_t _lines = 25;
     uint16_t _cols = 80;
-    Charset _charset = Charset::NONE;
-    vector<wchar_t> _chars = {}; // The chars that can be displayed
-    vector<wchar_t> _userChars = {}; // chars passed directly from the user
     vector<wchar_t> _charPool = {}; // Precomputed random chars
     vector<int> _colorPairMap = {}; // Color for each screen position
     float _dropletDensity = 1.0f; // How many columns should have droplets
@@ -129,6 +125,8 @@ private:
     vector<ColumnStatus> _colStat = {};
     high_resolution_clock::time_point _pauseTime = {};
     high_resolution_clock::time_point _lastSpawnTime = {};
+    uint32_t _currentEpochSeed = 0;
+    uint32_t _lastEpochSeed = UINT32_MAX;
     float _charsPerSec = 8.0f; // Neo/Cypher scene is ~8.3333333f
     ShadingMode _shadingMode = ShadingMode::RANDOM;
     bool _forceDrawEverything = false;
@@ -164,7 +162,6 @@ private:
     uniform_int_distribution<uint16_t> _randLen {};
     uniform_int_distribution<uint16_t> _randCol {};
     uniform_int_distribution<uint16_t> _randLingerMs {};
-    uniform_int_distribution<size_t> _randCharIdx {};
     uniform_real_distribution<float> _randSpeed {};
 
     ColorMode _colorMode = ColorMode::MONO;

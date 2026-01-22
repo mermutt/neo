@@ -21,6 +21,7 @@
 
 #include <cassert>
 #include <cstring>
+#include <iostream>
 
 Charset operator&(Charset lhs, Charset rhs) {
     return static_cast<Charset>(
@@ -48,6 +49,16 @@ void Cloud::Rain() {
         return;
 
     high_resolution_clock::time_point curTime = high_resolution_clock::now();
+
+    _currentEpochSeed++;
+
+    Epoch(_currentEpochSeed);
+}
+
+void Cloud::Epoch(uint32_t seed) {
+    mt.seed(seed);
+
+    high_resolution_clock::time_point curTime = high_resolution_clock::now();
     SpawnDroplets(curTime);
 
     if (_forceDrawEverything)
@@ -62,7 +73,6 @@ void Cloud::Rain() {
             auto& cs = _colStat[droplet.GetCol()];
             cs.numDroplets--;
 
-            // If the droplet dies very early, then mark the column as free
             if (droplet.GetTailPutLine() <= _lines / 4)
                 cs.canSpawn = true;
         }
@@ -87,7 +97,7 @@ void Cloud::Reset() {
         droplet.Reset();
 
     // Reset all the RNG stuff
-    mt.seed(0x1234567);
+    _lastEpochSeed = UINT32_MAX;
 
     int8_t lowPair, highPair;
     if (_numColorPairs < 3) {
@@ -131,18 +141,16 @@ void Cloud::Reset() {
         ResetMessage();
 
     _lastSpawnTime = high_resolution_clock::now();
+    _currentEpochSeed = 0;
 }
 
 void Cloud::InitChars() {
-    _charPool.resize(CHAR_POOL_SIZE);
-    _chars.clear();
+    _charPool.clear();
+
     struct UnicodeRange {
         Charset charset;
         vector<pair<wchar_t, wchar_t>> segments;
     };
-    if (_charset == Charset::NONE && _userChars.empty()) {
-        _charset = _defaultToAscii ? Charset::DEFAULT : Charset::EXTENDED_DEFAULT;
-    }
     vector<UnicodeRange> unicodeRanges = {
         { Charset::ENGLISH_DIGITS, {{48, 57}} },
         { Charset::ENGLISH_LETTERS, {{65, 90}, {97, 122}} },
@@ -161,12 +169,8 @@ void Cloud::InitChars() {
         UnicodeRange& theRange = unicodeRanges[range];
         for (const auto& segment : theRange.segments)
             for (wchar_t wchar = segment.first; wchar <= segment.second; wchar++)
-                _chars.push_back(wchar);
+                _charPool.push_back(wchar);
     }
-    _chars.insert(_chars.end(), _userChars.begin(), _userChars.end());
-    _randCharIdx = uniform_int_distribution<size_t>(0, _chars.size()-1);
-    for (size_t ii = 0; ii < CHAR_POOL_SIZE; ii++)
-        _charPool[ii] = _chars[_randCharIdx(mt)];
 }
 
 void Cloud::FillDroplet(Droplet* pDroplet, uint16_t col) {
@@ -228,8 +232,7 @@ void Cloud::SetCharsPerSec(float cps) {
 }
 
 wchar_t Cloud::GetChar(uint16_t line, uint16_t charPoolIdx) const {
-    const size_t charIdx = (charPoolIdx + line) % Cloud::CHAR_POOL_SIZE;
-    assert(charIdx < _charPool.size());
+    const size_t charIdx = (charPoolIdx + line) % _charPool.size();
     return _charPool[charIdx];
 }
 
@@ -678,15 +681,6 @@ void Cloud::UpdateDropletSpeeds() {
 void Cloud::SetColumnSpawn(uint16_t col, bool b) {
     assert(col < _colStat.size());
     _colStat[col].canSpawn = b;
-}
-
-void Cloud::AddChars(wchar_t begin, wchar_t end) {
-    if (begin > end)
-        Die("--chars: characters given in wrong order\n");
-
-    while (begin <= end) {
-        _userChars.push_back(begin++);
-    }
 }
 
 void Cloud::SetLingerTimes(uint16_t low_ms, uint16_t high_ms) {
