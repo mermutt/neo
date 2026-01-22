@@ -66,11 +66,13 @@ private:
     uint16_t _boundCol; // Which screen column this droplet renders to
     uint16_t _headPutLine; // Where we are advancing the head
     uint16_t _headCurLine; // Where the head currently is
+    uint16_t _headFreezeLine; // Where the head was at Epoch end
     uint16_t _tailPutLine; // Where we are advancing the tail
     uint16_t _tailCurLine; // The last empty line in this column
     uint16_t _endLine; // The head will not advance past this line
     uint16_t _charPoolIdx; // Index into the "charPool"
     uint16_t _length; // How many chars is this droplet?
+    uint32_t _dataOffset; // Relative offset of head char on screen
     float _charsPerSec; // How many chars will be drawn per second
     high_resolution_clock::time_point _lastTime; // Last time we drew something
     high_resolution_clock::time_point _headStopTime; // Time when head stopped
