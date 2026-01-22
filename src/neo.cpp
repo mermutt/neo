@@ -275,24 +275,6 @@ void HandleInput(Cloud* pCloud) {
             pCloud->SetCharsPerSec(cps);
             break;
         }
-        case KEY_LEFT: {
-            if (pCloud->GetGlitchy()) {
-                float gpct = pCloud->GetGlitchPct();
-                gpct -= 0.05f;
-                gpct = max(gpct, 0.0f);
-                pCloud->SetGlitchPct(gpct);
-            }
-            break;
-        }
-        case KEY_RIGHT: {
-            if (pCloud->GetGlitchy()) {
-                float gpct = pCloud->GetGlitchPct();
-                gpct += 0.05f;
-                gpct = min(gpct, 1.0f);
-                pCloud->SetGlitchPct(gpct);
-            }
-            break;
-        }
         case '\t': {
             if (pCloud->GetShadingMode() == Cloud::ShadingMode::RANDOM)
                 pCloud->SetShadingMode(Cloud::ShadingMode::DISTANCE_FROM_HEAD);
@@ -399,8 +381,6 @@ void PrintHelp(bool bErr, const char* appName) {
     fprintf(f, "  -d, --density=NUM      set the density of droplets\n");
     fprintf(f, "  -F, --fullwidth        use two columns per character\n");
     fprintf(f, "  -f, --fps=NUM          set the frames per second target/limit\n");
-    fprintf(f, "  -G, --glitchpct=NUM    set the percentage of screen chars that glitch\n");
-    fprintf(f, "  -g, --glitchms=NUM1,2  control how often characters glitch\n");
     fprintf(f, "  -h, --help             show this help message\n");
     fprintf(f, "  -l, --lingerms=NUM1,2  control how long characters linger after scrolling\n");
     fprintf(f, "  -M, --shadingmode=NUM  set the shading mode\n");
@@ -414,7 +394,6 @@ void PrintHelp(bool bErr, const char* appName) {
     fprintf(f, "      --charset=STR      set the character set\n");
     fprintf(f, "      --colormode=NUM    set the color mode\n");
     fprintf(f, "      --maxdpc=NUM       set the maximum droplets per column\n");
-    fprintf(f, "      --noglitch         disable character glitching\n");
     fprintf(f, "      --shortpct=NUM     set the percentage of shortened droplets\n");
     fprintf(f, "\n");
     fprintf(f, "See the manual page for more info: man neo\n");
@@ -427,7 +406,6 @@ enum LongOpts {
     CHARSET,
     COLORMODE,
     MAXDPC,
-    NOGLITCH,
     SHORTPCT,
 };
 
@@ -443,13 +421,10 @@ static constexpr option long_options[] = {
     { "density",     required_argument, nullptr, 'd' },
     { "fps",         required_argument, nullptr, 'f' },
     { "fullwidth",   no_argument,       nullptr, 'F' },
-    { "glitchms",    required_argument, nullptr, 'g' },
-    { "glitchpct",   required_argument, nullptr, 'G' },
     { "help",        no_argument,       nullptr, 'h' },
     { "lingerms",    required_argument, nullptr, 'l' },
     { "maxdpc",      required_argument, nullptr, LongOpts::MAXDPC },
     { "message",     required_argument, nullptr, 'm' },
-    { "noglitch",    no_argument,       nullptr, LongOpts::NOGLITCH },
     { "screensaver", no_argument,       nullptr, 's' },
     { "shadingmode", required_argument, nullptr, 'M' },
     { "profile",     no_argument,       nullptr, 'p' },
@@ -630,28 +605,6 @@ void ParseArgs(int argc, char* argv[], Cloud* pCloud, double* targetFPS, bool* p
             pCloud->SetFullWidth();
             break;
         }
-        case 'g': {
-            char* nextStr;
-            const long int low_ms = strtol(optarg, &nextStr, 10);
-            if (!nextStr || *nextStr == '\0' || *(nextStr+1) == '\0')
-                Die("Invalid -g/--glitchms option\n");
-
-            nextStr++;
-            const long int high_ms = strtol(nextStr, nullptr, 10);
-            if (low_ms <= 0 || high_ms <= 0 || low_ms > high_ms || high_ms > 0xFFFFU)
-                Die("Invalid -g/--glitchms option\n");
-
-            pCloud->SetGlitchTimes(static_cast<uint16_t>(low_ms), static_cast<uint16_t>(high_ms));
-            break;
-        }
-        case 'G': {
-            const float gpct = atof(optarg);
-            if (gpct < 0.0f || gpct > 100.0f)
-                Die("-G/--glitchpct must be between 0 and 100.0 inclusive\n");
-
-            pCloud->SetGlitchPct(gpct / 100.0f);
-            break;
-        }
         case 'h':
             Cleanup();
             PrintHelp(false, argv[0]);
@@ -732,11 +685,6 @@ void ParseArgs(int argc, char* argv[], Cloud* pCloud, double* targetFPS, bool* p
             pCloud->SetMaxDropletsPerColumn(static_cast<uint8_t>(maxdpc));
             break;
         }
-        case LongOpts::NOGLITCH:
-            pCloud->SetGlitchy(false);
-            pCloud->SetGlitchPct(0.0f);
-            pCloud->SetGlitchTimes(0xFFFFU, 0xFFFFU);
-            break;
         case LongOpts::SHORTPCT: {
             const float pct = atof(optarg);
             if (pct < 0.0f || pct > 100.0f)

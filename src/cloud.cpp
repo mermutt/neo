@@ -53,13 +53,10 @@ void Cloud::Rain() {
     if (_forceDrawEverything)
         clear();
 
-    const bool timeForGlitch = TimeForGlitch(curTime);
     for (auto& droplet : _droplets) {
         if (!droplet.IsAlive())
             continue;
         droplet.Advance(curTime);
-        if (timeForGlitch)
-            DoGlitch(droplet);
         droplet.Draw(curTime, _forceDrawEverything);
         if (!droplet.IsAlive()) {
             auto& cs = _colStat[droplet.GetCol()];
@@ -76,11 +73,6 @@ void Cloud::Rain() {
         DrawMessage();
     }
 
-    // Bookkeeping logic for glitching and drawing
-    if (timeForGlitch) {
-        _lastGlitchTime = curTime;
-        _nextGlitchTime = _lastGlitchTime + milliseconds(_randGlitchMs(mt));
-    }
     _forceDrawEverything = false;
 }
 
@@ -115,12 +107,10 @@ void Cloud::Reset() {
     _randCpIdx = uniform_int_distribution<uint16_t>(0, static_cast<uint16_t>(CHAR_POOL_SIZE-1));
     _randLen = uniform_int_distribution<uint16_t>(1, _lines - 2);
     _randCol = uniform_int_distribution<uint16_t>(0, _cols - 1);
-    _randGlitchMs = uniform_int_distribution<uint16_t>(_glitchLowMs, _glitchHighMs);
     _randLingerMs = uniform_int_distribution<uint16_t>(_lingerLowMs, _lingerHighMs); // Cannot be 0
     _randSpeed = uniform_real_distribution<float>(0.3333333f, 1.0f);
 
     const size_t screenSize = _lines * _cols;
-    FillGlitchMap(screenSize);
     FillColorMap(screenSize);
 
     const float dropletSeconds = _lines / _charsPerSec;
@@ -140,15 +130,11 @@ void Cloud::Reset() {
     if (!_message.empty())
         ResetMessage();
 
-    _lastGlitchTime = high_resolution_clock::now();
-    _nextGlitchTime = _lastGlitchTime + milliseconds(_randGlitchMs(mt));
-    _lastSpawnTime = _lastGlitchTime;
+    _lastSpawnTime = high_resolution_clock::now();
 }
 
 void Cloud::InitChars() {
     _charPool.resize(CHAR_POOL_SIZE);
-    _glitchPool.resize(GLITCH_POOL_SIZE);
-    _glitchPoolIdx = 0;
     _chars.clear();
     struct UnicodeRange {
         Charset charset;
@@ -173,8 +159,6 @@ void Cloud::InitChars() {
     size_t numRanges = unicodeRanges.size();
     for (size_t range = 0; range < numRanges; range++) {
         UnicodeRange& theRange = unicodeRanges[range];
-        if (!(_charset & theRange.charset))
-            continue;
         for (const auto& segment : theRange.segments)
             for (wchar_t wchar = segment.first; wchar <= segment.second; wchar++)
                 _chars.push_back(wchar);
@@ -183,8 +167,6 @@ void Cloud::InitChars() {
     _randCharIdx = uniform_int_distribution<size_t>(0, _chars.size()-1);
     for (size_t ii = 0; ii < CHAR_POOL_SIZE; ii++)
         _charPool[ii] = _chars[_randCharIdx(mt)];
-    for (size_t ii = 0; ii < GLITCH_POOL_SIZE; ii++)
-        _glitchPool[ii] = _chars[_randCharIdx(mt)];
 }
 
 void Cloud::FillDroplet(Droplet* pDroplet, uint16_t col) {
@@ -202,49 +184,6 @@ void Cloud::FillDroplet(Droplet* pDroplet, uint16_t col) {
     *pDroplet = Droplet(this, col, endLine, cpIdx, len, speed, ttl);
 }
 
-bool Cloud::TimeForGlitch(high_resolution_clock::time_point time) const {
-    return _glitchy ? (time >= _nextGlitchTime) : false;
-}
-
-void Cloud::DoGlitch(const Droplet& droplet) {
-    if (!_glitchy)
-        return;
-    uint16_t startLine = 0;
-    const uint16_t tpLine = droplet.GetTailPutLine();
-    if (tpLine != 0xFFFF)
-        startLine = tpLine + 1;
-
-    const uint16_t hpLine = droplet.GetHeadPutLine();
-    const uint16_t col = droplet.GetCol();
-    const uint16_t cpIdx = droplet.GetCharPoolIdx();
-
-    for (uint16_t line = startLine; line <= hpLine; line++) {
-        if (IsGlitched(line, col)) {
-            const size_t charIdx = (cpIdx + line) % Cloud::CHAR_POOL_SIZE;
-            assert(charIdx < _charPool.size());
-            assert(_glitchPoolIdx < _glitchPool.size());
-            _charPool[charIdx] = _glitchPool[_glitchPoolIdx];
-            _glitchPoolIdx = (_glitchPoolIdx + 1) % GLITCH_POOL_SIZE;
-        }
-    }
-}
-
-bool Cloud::IsBright(high_resolution_clock::time_point time) const {
-    if (time < _lastGlitchTime)
-        return false;
-    uint64_t timeSinceGlitch = duration_cast<nanoseconds>(time - _lastGlitchTime).count();
-    uint64_t timeBetweenGlitches = duration_cast<nanoseconds>(_nextGlitchTime - _lastGlitchTime).count();
-    return static_cast<double>(timeSinceGlitch) / timeBetweenGlitches <= 0.25;
-}
-
-bool Cloud::IsDim(high_resolution_clock::time_point time) const {
-    if (time > _nextGlitchTime)
-        return true;
-    uint64_t timeSinceGlitch = duration_cast<nanoseconds>(time - _lastGlitchTime).count();
-    uint64_t timeBetweenGlitches = duration_cast<nanoseconds>(_nextGlitchTime - _lastGlitchTime).count();
-    return static_cast<double>(timeSinceGlitch) / timeBetweenGlitches >= 0.75;
-}
-
 void Cloud::GetAttr(uint16_t line, uint16_t col, wchar_t val, Droplet::CharLoc ct,
                     CharAttr* pAttr, high_resolution_clock::time_point time,
                     uint16_t headPutLine, uint16_t length) const {
@@ -256,15 +195,6 @@ void Cloud::GetAttr(uint16_t line, uint16_t col, wchar_t val, Droplet::CharLoc c
         pAttr->colorPair = _numColorPairs -
             round(static_cast<float>(headPutLine - line) / length *
                   static_cast<float>(_numColorPairs - 1));
-    }
-    if (_glitchy && _glitchMap.at(idx)) {
-        if (IsBright(time)) {
-            pAttr->colorPair++;
-            pAttr->isBold = true;
-        } else if (IsDim(time)) {
-            pAttr->colorPair--;
-            pAttr->isBold = false;
-        }
     }
     switch (ct) {
         case Droplet::CharLoc::TAIL:
@@ -301,14 +231,6 @@ wchar_t Cloud::GetChar(uint16_t line, uint16_t charPoolIdx) const {
     const size_t charIdx = (charPoolIdx + line) % Cloud::CHAR_POOL_SIZE;
     assert(charIdx < _charPool.size());
     return _charPool[charIdx];
-}
-
-bool Cloud::IsGlitched(uint16_t line, uint16_t col) const {
-    if (!_glitchy)
-        return false;
-    const size_t mapIdx = col * _lines + line;
-    assert(mapIdx < _glitchMap.size());
-    return _glitchMap[mapIdx];
 }
 
 void Cloud::TogglePause() {
@@ -765,25 +687,6 @@ void Cloud::AddChars(wchar_t begin, wchar_t end) {
     while (begin <= end) {
         _userChars.push_back(begin++);
     }
-}
-
-void Cloud::SetGlitchPct(float pct) {
-    _glitchPct = pct;
-    FillGlitchMap(_lines * _cols);
-}
-
-void Cloud::FillGlitchMap(size_t screenSize) {
-    if (!_glitchy)
-        return;
-    _glitchMap.resize(screenSize);
-    for (size_t i = 0; i < screenSize; i++) {
-        _glitchMap[i] = _randChance(mt) <= _glitchPct;
-    }
-}
-
-void Cloud::SetGlitchTimes(uint16_t low_ms, uint16_t high_ms) {
-    _glitchLowMs = low_ms;
-    _glitchHighMs = high_ms;
 }
 
 void Cloud::SetLingerTimes(uint16_t low_ms, uint16_t high_ms) {

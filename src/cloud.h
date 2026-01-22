@@ -70,10 +70,8 @@ public:
     float GetCharsPerSec() const { return _charsPerSec; }
     void SetCharsPerSec(float cps);
     wchar_t GetChar(uint16_t line, uint16_t charPoolIdx) const;
-    bool IsGlitched(uint16_t line, uint16_t col) const;
 
     static constexpr size_t CHAR_POOL_SIZE = 2048;
-    static constexpr size_t GLITCH_POOL_SIZE = 1024;
 
     void ForceDrawEverything() { _forceDrawEverything = true; }
     ShadingMode GetShadingMode() const { return _shadingMode; }
@@ -95,11 +93,6 @@ public:
     bool Raining() { return _raining; }
     void SetRaining(bool b) { _raining = b; }
     void SetBoldMode(BoldMode bm) { _boldMode = bm; }
-    float GetGlitchPct() const { return _glitchPct; }
-    void SetGlitchPct(float pct);
-    void SetGlitchTimes(uint16_t low_ms, uint16_t high_ms);
-    bool GetGlitchy() const { return _glitchy; }
-    void SetGlitchy(bool b) { _glitchy = b; }
     void SetShortPct(float pct) { _shortPct = pct; }
     void SetDieEarlyPct(float pct) { _dieEarlyPct = pct; }
     void SetLingerTimes(uint16_t low_ms, uint16_t high_ms);
@@ -124,9 +117,6 @@ private:
     vector<wchar_t> _chars = {}; // The chars that can be displayed
     vector<wchar_t> _userChars = {}; // chars passed directly from the user
     vector<wchar_t> _charPool = {}; // Precomputed random chars
-    vector<wchar_t> _glitchPool = {}; // Precomputed random chars used for glitching
-    size_t _glitchPoolIdx = 0;
-    vector<bool> _glitchMap = {}; // Which screen positions are glitched
     vector<int> _colorPairMap = {}; // Color for each screen position
     float _dropletDensity = 1.0f; // How many columns should have droplets
     float _dropletsPerSec = 5.0f; // Number of droplets to spawn each second
@@ -137,8 +127,6 @@ private:
         bool canSpawn; // true if more droplets can be added to this column
     };
     vector<ColumnStatus> _colStat = {};
-    high_resolution_clock::time_point _lastGlitchTime = {};
-    high_resolution_clock::time_point _nextGlitchTime = {};
     high_resolution_clock::time_point _pauseTime = {};
     high_resolution_clock::time_point _lastSpawnTime = {};
     float _charsPerSec = 8.0f; // Neo/Cypher scene is ~8.3333333f
@@ -151,10 +139,6 @@ private:
     bool _async = false;
     bool _raining = true;
     BoldMode _boldMode = BoldMode::RANDOM;
-    float _glitchPct = 0.1f;
-    uint16_t _glitchLowMs = 300;
-    uint16_t _glitchHighMs = 400;
-    bool _glitchy = true;
     float _shortPct = 0.5f;
     float _dieEarlyPct = 0.3333333f;
     uint16_t _lingerLowMs = 1;
@@ -179,7 +163,6 @@ private:
     uniform_int_distribution<uint16_t> _randCpIdx {};
     uniform_int_distribution<uint16_t> _randLen {};
     uniform_int_distribution<uint16_t> _randCol {};
-    uniform_int_distribution<uint16_t> _randGlitchMs {};
     uniform_int_distribution<uint16_t> _randLingerMs {};
     uniform_int_distribution<size_t> _randCharIdx {};
     uniform_real_distribution<float> _randSpeed {};
@@ -188,15 +171,10 @@ private:
     int _numColorPairs = 7;
     vector<ColorContent> _usrColors = {};
 
-    bool TimeForGlitch(high_resolution_clock::time_point time) const;
-    void DoGlitch(const Droplet& droplet);
-    bool IsBright(high_resolution_clock::time_point time) const;
-    bool IsDim(high_resolution_clock::time_point time) const;
     void FillDroplet(Droplet* pDroplet, uint16_t col);
 
     void SpawnDroplets(high_resolution_clock::time_point curTime);
     void FillColorMap(size_t screenSize);
-    void FillGlitchMap(size_t screenSize);
     void ResetMessage();
     void CalcMessage();
     void DrawMessage() const;

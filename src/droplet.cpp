@@ -123,7 +123,6 @@ void Droplet::Draw(high_resolution_clock::time_point curTime, bool drawEverythin
         startLine = _tailPutLine + 1;
     }
     for (uint16_t line = startLine; line <= _headPutLine; line++) {
-        const bool isGlitched = _pCloud->IsGlitched(line, _boundCol);
         const wchar_t val = _pCloud->GetChar(line, _charPoolIdx);
 
         CharLoc cl = CharLoc::MIDDLE;
@@ -132,8 +131,8 @@ void Droplet::Draw(high_resolution_clock::time_point curTime, bool drawEverythin
         if (line == _headPutLine && IsHeadBright(curTime))
             cl = CharLoc::HEAD;
 
-        // No need to draw non-glitched chars between tail and _headCurLine
-        if (cl == CharLoc::MIDDLE && line < _headCurLine && !isGlitched && line != _endLine &&
+        // No need to draw chars between tail and _headCurLine
+        if (cl == CharLoc::MIDDLE && line < _headCurLine && line != _endLine &&
             _pCloud->GetShadingMode() != Cloud::ShadingMode::DISTANCE_FROM_HEAD && !drawEverything)
             continue;
 
