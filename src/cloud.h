@@ -43,6 +43,7 @@ using namespace std;
 class Cloud {
 public:
     Cloud(ColorMode cm, bool def2ascii); // Must be called *AFTER* InitCurses
+    Cloud(const Cloud& other); // Copy constructor for simulation
 
     enum class ShadingMode : unsigned {
         RANDOM,
@@ -124,6 +125,7 @@ private:
     vector<ColumnStatus> _colStat = {};
     high_resolution_clock::time_point _pauseTime = {};
     high_resolution_clock::time_point _lastSpawnTime = {};
+    high_resolution_clock::time_point _logicalTime = {};
     uint32_t _currentEpochSeed = 0;
     uint32_t _lastEpochSeed = UINT32_MAX;
     bool _currentEpochBool = false;

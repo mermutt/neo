@@ -37,20 +37,79 @@ Cloud::Cloud(ColorMode cm, bool def2ascii) :
     _lines(static_cast<uint16_t>(LINES)),
     _cols(COLS),
     _defaultToAscii(def2ascii),
-    _colorMode(cm)
+    _colorMode(cm),
+    _logicalTime(high_resolution_clock::now()),
+    _lastSpawnTime(_logicalTime)
 {
     assert(stdscr != nullptr);
     if (cm != ColorMode::MONO)
         SetColor(Color::GREEN);
 }
 
+Cloud::Cloud(const Cloud& other) :
+    _droplets(other._droplets),
+    _numDroplets(other._numDroplets),
+    _lines(other._lines),
+    _cols(other._cols),
+    _charPool(other._charPool),
+    _colorPairMap(other._colorPairMap),
+    _dropletDensity(other._dropletDensity),
+    _dropletsPerSec(other._dropletsPerSec),
+    _colStat(other._colStat),
+    _pauseTime(other._pauseTime),
+    _lastSpawnTime(other._lastSpawnTime),
+    _currentEpochSeed(other._currentEpochSeed),
+    _lastEpochSeed(other._lastEpochSeed),
+    _currentEpochBool(other._currentEpochBool),
+    _dropletsCurrentEpoch(other._dropletsCurrentEpoch),
+    _dropletsPreviousEpoch(other._dropletsPreviousEpoch),
+    _charsPerSec(other._charsPerSec),
+    _shadingMode(other._shadingMode),
+    _pause(other._pause),
+    _fullWidth(other._fullWidth),
+    _color(other._color),
+    _defaultBackground(other._defaultBackground),
+    _async(other._async),
+    _raining(other._raining),
+    _boldMode(other._boldMode),
+    _shortPct(other._shortPct),
+    _dieEarlyPct(other._dieEarlyPct),
+    _lingerLowMs(other._lingerLowMs),
+    _lingerHighMs(other._lingerHighMs),
+    _maxDropletsPerColumn(other._maxDropletsPerColumn),
+    _defaultToAscii(other._defaultToAscii),
+    _simulationMode(other._simulationMode),
+    _nextEpochSeed(other._nextEpochSeed),
+    mt(other.mt),
+    _randColorPair(other._randColorPair),
+    _randChance(other._randChance),
+    _randLine(other._randLine),
+    _randCpIdx(other._randCpIdx),
+    _randLen(other._randLen),
+    _randCol(other._randCol),
+    _randLingerMs(other._randLingerMs),
+    _randSpeed(other._randSpeed),
+    _colorMode(other._colorMode),
+    _numColorPairs(other._numColorPairs),
+    _usrColors(other._usrColors),
+    _logicalTime(other._logicalTime)
+{
+    // Update droplet Cloud pointers to point to this Cloud instance
+    for (auto& droplet : _droplets) {
+        droplet.SetCloud(this);
+    }
+}
+
 void Cloud::Rain() {
     if (_pause)
         return;
 
-    high_resolution_clock::time_point curTime = high_resolution_clock::now();
+    // Use logical time for deterministic behavior
+    // Each frame advances logical time by fixed step (e.g., 16.67ms for ~60 FPS)
+    const milliseconds timeStep(1000 / 60);
+    _logicalTime += timeStep;
 
-    EpochNotch();
+    EpochNotch(_logicalTime);
 
     // Check if we should start a new epoch (after processing deaths)
     if (_dropletsPreviousEpoch == 0) {
@@ -67,56 +126,56 @@ void Cloud::Rain() {
 }
 
 void Cloud::SimulateEpoch() {
-    // Save state before simulation
-    auto savedMt = mt;
-    auto savedLastSpawnTime = _lastSpawnTime;
-    auto savedColStat = _colStat;
-    auto savedDroplets = _droplets;
-    size_t savedDropletsCurrentEpoch = _dropletsCurrentEpoch;
-    size_t savedDropletsPreviousEpoch = _dropletsPreviousEpoch;
-
-    // First run simulation mode to pre-compute droplet positions
-    _simulationMode = true;
-
-    // Use next epoch seed for simulation (already incremented in Rain())
-    mt.seed(_currentEpochSeed);
+    // Create a copy of this Cloud for simulation
+    Cloud simCloud = *this;
     
-    // Start simulation time from saved last spawn time
-    high_resolution_clock::time_point simTime = savedLastSpawnTime;
+    // Enable simulation mode on the copy
+    simCloud._simulationMode = true;
+    
+    // Use next epoch seed for simulation (already incremented in Rain())
+    simCloud.mt.seed(_currentEpochSeed);
+    
+    // Start simulation time from current logical time
+    high_resolution_clock::time_point simTime = _logicalTime;
     
     // Simulate with fixed time steps (e.g., 1/60 second)
     const milliseconds timeStep(1000 / 60);
+    
+    // Safety limit to prevent infinite loops
+    const size_t maxIterations = 10000;
+    size_t iteration = 0;
 
-    while (true) {
+    while (iteration++ < maxIterations) {
         simTime += timeStep;
-        EpochNotch(simTime);
+        simCloud.EpochNotch(simTime);
 
         // Check if we reached the end of the epoch.
-        if (_dropletsPreviousEpoch == 0) {
+        if (simCloud._dropletsPreviousEpoch == 0) {
             // All droplets from previous epoch are gone, flip the epoch bool
-            _currentEpochBool = !_currentEpochBool;
+            simCloud._currentEpochBool = !simCloud._currentEpochBool;
             // Move current epoch droplets to previous epoch counter
-            _dropletsPreviousEpoch = _dropletsCurrentEpoch;
-            _dropletsCurrentEpoch = 0;
+            simCloud._dropletsPreviousEpoch = simCloud._dropletsCurrentEpoch;
+            simCloud._dropletsCurrentEpoch = 0;
             break;
         }
     }
-
-    // Copy simulation data from simulated droplets to saved droplets
-    for (size_t i = 0; i < _droplets.size() && i < savedDroplets.size(); ++i) {
-        savedDroplets[i].SetSimulationData(_droplets[i].GetDataOffset(), _droplets[i].GetHeadPutLine());
+    
+    if (iteration >= maxIterations) {
+        // Simulation didn't complete - handle error
+        // For now, just continue without simulation data
+        return;
     }
 
-    _simulationMode = false;
-
-    // Restore state for normal mode
-    mt = savedMt;
-    _lastSpawnTime = savedLastSpawnTime;
-    _colStat = savedColStat;
-    _droplets = savedDroplets;
-    _dropletsCurrentEpoch = savedDropletsCurrentEpoch;
-    _dropletsPreviousEpoch = savedDropletsPreviousEpoch;
-
+    // Copy simulation data from simulated droplets to real droplets
+    // We need to match droplets by index since they should be in same order
+    for (size_t i = 0; i < _droplets.size() && i < simCloud._droplets.size(); ++i) {
+        _droplets[i].SetSimulationData(
+            simCloud._droplets[i].GetDataOffset(), 
+            simCloud._droplets[i].GetHeadPutLine()
+        );
+    }
+    
+    // Seed RNG for normal mode (same seed used in simulation)
     mt.seed(_currentEpochSeed);
 }
 

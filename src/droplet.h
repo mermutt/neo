@@ -55,6 +55,7 @@ public:
     }
     uint16_t GetDataOffset() const { return _dataOffset; }
     uint16_t GetHeadFreezeLine() const { return _headFreezeLine; }
+    void SetCloud(Cloud* cloud) { _pCloud = cloud; }
     void IncrementTime(milliseconds time); // To facilitate pausing
 
     enum class CharLoc { // describes where a char is within a Droplet
