@@ -114,7 +114,7 @@ void Droplet::Advance(high_resolution_clock::time_point curTime) {
     _lastTime = curTime; // Required or else nothing will ever get drawn...
 }
 
-void Droplet::Draw(high_resolution_clock::time_point curTime, bool drawEverything) {
+void Droplet::Draw(high_resolution_clock::time_point curTime) {
     uint16_t startLine = 0;
     if (_tailPutLine != 0xFFFF) {
         // Delete the very end of tail
@@ -135,7 +135,7 @@ void Droplet::Draw(high_resolution_clock::time_point curTime, bool drawEverythin
 
         // No need to draw chars between tail and _headCurLine
         if (cl == CharLoc::MIDDLE && line < _headCurLine && line != _endLine &&
-            _pCloud->GetShadingMode() != Cloud::ShadingMode::DISTANCE_FROM_HEAD && !drawEverything)
+            _pCloud->GetShadingMode() != Cloud::ShadingMode::DISTANCE_FROM_HEAD)
             continue;
 
         Cloud::CharAttr attr;

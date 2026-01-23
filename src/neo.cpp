@@ -243,11 +243,6 @@ void HandleInput(Cloud* pCloud) {
         exit(0);
     }
     switch (ch) {
-        case KEY_RESIZE:
-        case ' ':
-            pCloud->Reset();
-            pCloud->ForceDrawEverything();
-            break;
         case 'a':
             pCloud->SetAsync(!pCloud->GetAsync());
             pCloud->SetColumnSpeeds();
@@ -384,7 +379,6 @@ void PrintHelp(bool bErr, const char* appName) {
     fprintf(f, "  -h, --help             show this help message\n");
     fprintf(f, "  -l, --lingerms=NUM1,2  control how long characters linger after scrolling\n");
     fprintf(f, "  -M, --shadingmode=NUM  set the shading mode\n");
-    fprintf(f, "  -m, --message=STR      display a message\n");
     fprintf(f, "  -p, --profile          enable profiling mode\n");
     fprintf(f, "  -r, --rippct=NUM       set the percentage of droplets that die early\n");
     fprintf(f, "  -S, --speed=NUM        set the scroll speed in chars per second\n");
@@ -424,7 +418,6 @@ static constexpr option long_options[] = {
     { "help",        no_argument,       nullptr, 'h' },
     { "lingerms",    required_argument, nullptr, 'l' },
     { "maxdpc",      required_argument, nullptr, LongOpts::MAXDPC },
-    { "message",     required_argument, nullptr, 'm' },
     { "screensaver", no_argument,       nullptr, 's' },
     { "shadingmode", required_argument, nullptr, 'M' },
     { "profile",     no_argument,       nullptr, 'p' },
@@ -593,9 +586,6 @@ void ParseArgs(int argc, char* argv[], Cloud* pCloud, double* targetFPS, bool* p
             pCloud->SetShadingMode(sm);
             break;
         }
-        case 'm':
-            pCloud->SetMessage(optarg);
-            break;
         case 'p':
             *profiling = true;
             break;

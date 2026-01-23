@@ -57,7 +57,8 @@ public:
     };
 
     void Rain();
-    void Epoch(uint32_t seed);
+    void SimulateEpoch();
+    void EpochNotch(high_resolution_clock::time_point curTime = high_resolution_clock::now());
     void Reset();
 
     struct CharAttr {
@@ -74,9 +75,8 @@ public:
 
     static constexpr size_t CHAR_POOL_SIZE = 2048;
 
-    void ForceDrawEverything() { _forceDrawEverything = true; }
     ShadingMode GetShadingMode() const { return _shadingMode; }
-    void SetShadingMode(ShadingMode sm) { _shadingMode = sm; ForceDrawEverything(); }
+    void SetShadingMode(ShadingMode sm) { _shadingMode = sm; }
     void TogglePause();
     Color GetColor() const { return _color; }
     void SetColor(Color c);
@@ -96,7 +96,6 @@ public:
     void SetDieEarlyPct(float pct) { _dieEarlyPct = pct; }
     void SetLingerTimes(uint16_t low_ms, uint16_t high_ms);
 
-    void SetMessage(const char* msg);
     ColorMode GetColorMode() const { return _colorMode; }
     uint16_t GetLines() const { return _lines; }
     uint16_t GetCols() const { return _cols; }
@@ -132,7 +131,6 @@ private:
     size_t _dropletsPreviousEpoch = 0;
     float _charsPerSec = 8.0f; // Neo/Cypher scene is ~8.3333333f
     ShadingMode _shadingMode = ShadingMode::RANDOM;
-    bool _forceDrawEverything = false;
     bool _pause = false;
     bool _fullWidth = false;
     Color _color = Color::GREEN;
@@ -146,15 +144,8 @@ private:
     uint16_t _lingerHighMs = 3000;
     uint8_t _maxDropletsPerColumn = 3;
     bool _defaultToAscii = false;
-
-    struct MsgChr {
-        explicit MsgChr(char v) : line(0), col(0), val(v), draw(false) {}
-        uint16_t line = 0;
-        uint16_t col = 0;
-        char val = '\0';
-        bool draw = false;
-    };
-    vector<MsgChr> _message = {};
+    bool _simulationMode = false;
+    uint32_t _nextEpochSeed = 0;
 
     // RNG stuff
     mt19937 mt {};
@@ -175,9 +166,6 @@ private:
 
     void SpawnDroplets(high_resolution_clock::time_point curTime);
     void FillColorMap(size_t screenSize);
-    void ResetMessage();
-    void CalcMessage();
-    void DrawMessage() const;
 };
 
 #endif

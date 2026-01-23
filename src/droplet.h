@@ -39,7 +39,7 @@ public:
     void Reset();
     void Activate(high_resolution_clock::time_point curTime);
     void Advance(high_resolution_clock::time_point curTime);
-    void Draw(high_resolution_clock::time_point curTime, bool drawEverything);
+    void Draw(high_resolution_clock::time_point curTime);
 
     // Getters/Setters/Convenience
     bool IsAlive() const { return _isAlive; }
@@ -49,6 +49,12 @@ public:
     uint16_t GetTailPutLine() const { return _tailPutLine; }
     uint16_t GetCharPoolIdx() const { return _charPoolIdx; }
     bool GetEpochBool() const { return _epochBool; }
+    void SetSimulationData(uint16_t dataOffset, uint16_t headFreezeLine) {
+        _dataOffset = dataOffset;
+        _headFreezeLine = headFreezeLine;
+    }
+    uint16_t GetDataOffset() const { return _dataOffset; }
+    uint16_t GetHeadFreezeLine() const { return _headFreezeLine; }
     void IncrementTime(milliseconds time); // To facilitate pausing
 
     enum class CharLoc { // describes where a char is within a Droplet

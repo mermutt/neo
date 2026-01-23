@@ -50,9 +50,7 @@ void Cloud::Rain() {
 
     high_resolution_clock::time_point curTime = high_resolution_clock::now();
 
-    _currentEpochSeed++;
-
-    Epoch(_currentEpochSeed);
+    EpochNotch();
 
     // Check if we should start a new epoch (after processing deaths)
     if (_dropletsPreviousEpoch == 0) {
@@ -61,23 +59,77 @@ void Cloud::Rain() {
         // Move current epoch droplets to previous epoch counter
         _dropletsPreviousEpoch = _dropletsCurrentEpoch;
         _dropletsCurrentEpoch = 0;
+
+        _currentEpochSeed++;
+
+        SimulateEpoch();
     }
 }
 
-void Cloud::Epoch(uint32_t seed) {
-    mt.seed(seed);
+void Cloud::SimulateEpoch() {
+    // Save state before simulation
+    auto savedMt = mt;
+    auto savedLastSpawnTime = _lastSpawnTime;
+    auto savedColStat = _colStat;
+    auto savedDroplets = _droplets;
+    size_t savedDropletsCurrentEpoch = _dropletsCurrentEpoch;
+    size_t savedDropletsPreviousEpoch = _dropletsPreviousEpoch;
 
-    high_resolution_clock::time_point curTime = high_resolution_clock::now();
+    // First run simulation mode to pre-compute droplet positions
+    _simulationMode = true;
+
+    // Use next epoch seed for simulation (already incremented in Rain())
+    mt.seed(_currentEpochSeed);
+    
+    // Start simulation time from saved last spawn time
+    high_resolution_clock::time_point simTime = savedLastSpawnTime;
+    
+    // Simulate with fixed time steps (e.g., 1/60 second)
+    const milliseconds timeStep(1000 / 60);
+
+    while (true) {
+        simTime += timeStep;
+        EpochNotch(simTime);
+
+        // Check if we reached the end of the epoch.
+        if (_dropletsPreviousEpoch == 0) {
+            // All droplets from previous epoch are gone, flip the epoch bool
+            _currentEpochBool = !_currentEpochBool;
+            // Move current epoch droplets to previous epoch counter
+            _dropletsPreviousEpoch = _dropletsCurrentEpoch;
+            _dropletsCurrentEpoch = 0;
+            break;
+        }
+    }
+
+    // Copy simulation data from simulated droplets to saved droplets
+    for (size_t i = 0; i < _droplets.size() && i < savedDroplets.size(); ++i) {
+        savedDroplets[i].SetSimulationData(_droplets[i].GetDataOffset(), _droplets[i].GetHeadPutLine());
+    }
+
+    _simulationMode = false;
+
+    // Restore state for normal mode
+    mt = savedMt;
+    _lastSpawnTime = savedLastSpawnTime;
+    _colStat = savedColStat;
+    _droplets = savedDroplets;
+    _dropletsCurrentEpoch = savedDropletsCurrentEpoch;
+    _dropletsPreviousEpoch = savedDropletsPreviousEpoch;
+
+    mt.seed(_currentEpochSeed);
+}
+
+void Cloud::EpochNotch(high_resolution_clock::time_point curTime) {
     SpawnDroplets(curTime);
-
-    if (_forceDrawEverything)
-        clear();
 
     for (auto& droplet : _droplets) {
         if (!droplet.IsAlive())
             continue;
         droplet.Advance(curTime);
-        droplet.Draw(curTime, _forceDrawEverything);
+        if (!_simulationMode) {
+            droplet.Draw(curTime);
+        }
         if (!droplet.IsAlive()) {
             auto& cs = _colStat[droplet.GetCol()];
             cs.numDroplets--;
@@ -85,23 +137,15 @@ void Cloud::Epoch(uint32_t seed) {
             if (droplet.GetTailPutLine() <= _lines / 4)
                 cs.canSpawn = true;
 
-            // Decrement the appropriate epoch counter
             if (droplet.GetEpochBool() == _currentEpochBool) {
                 assert(_dropletsCurrentEpoch);
                 _dropletsCurrentEpoch--;
             } else {
                 assert(_dropletsPreviousEpoch);
                 _dropletsPreviousEpoch--;
-            }
         }
     }
-
-    if (!_message.empty()) {
-        CalcMessage();
-        DrawMessage();
-    }
-
-    _forceDrawEverything = false;
+}
 }
 
 void Cloud::Reset() {
@@ -121,6 +165,8 @@ void Cloud::Reset() {
     _currentEpochBool = false;
     _dropletsCurrentEpoch = 0;
     _dropletsPreviousEpoch = 0;
+    _simulationMode = false;
+    _nextEpochSeed = 0;
 
     int8_t lowPair, highPair;
     if (_numColorPairs < 3) {
@@ -159,9 +205,6 @@ void Cloud::Reset() {
     SetAsync(_async);
     SetColumnSpeeds();
     UpdateDropletSpeeds();
-
-    if (!_message.empty())
-        ResetMessage();
 
     _lastSpawnTime = high_resolution_clock::now();
     _currentEpochSeed = 0;
@@ -646,7 +689,6 @@ void Cloud::SetColor(Color c) {
 
     if (_colorMode != ColorMode::MONO)
         bkgd(COLOR_PAIR(1));
-    ForceDrawEverything();
 }
 
 void Cloud::SpawnDroplets(high_resolution_clock::time_point curTime) {
@@ -713,84 +755,9 @@ void Cloud::SetLingerTimes(uint16_t low_ms, uint16_t high_ms) {
     _lingerHighMs = high_ms;
 }
 
-void Cloud::SetMessage(const char* msg) {
-    while (*msg)
-        _message.emplace_back(*msg++);
-}
-
 void Cloud::FillColorMap(size_t screenSize) {
     _colorPairMap.resize(screenSize);
     for (size_t i = 0; i < screenSize; i++) {
         _colorPairMap[i] = _randColorPair(mt);
-    }
-}
-
-// Reset the position of all message chars and clear them.
-// The message is centered between the first and last quarter
-// of the screen.
-void Cloud::ResetMessage() {
-    const uint16_t firstCol = _cols / 4;
-    const uint16_t lastCol = 3 * _cols / 4;
-    const uint16_t charsPerCol = lastCol - firstCol + 1;
-    const uint16_t msgLines = static_cast<uint16_t>(_message.size() / charsPerCol + 1);
-    const uint16_t firstLine = _lines / 2 - msgLines / 2;
-
-    size_t charsRemaining = _message.size();
-    uint16_t line = firstLine;
-    uint16_t col = firstCol;
-    if (charsRemaining < charsPerCol)
-        col += (charsPerCol - static_cast<uint16_t>(charsRemaining)) / 2;
-
-    for (auto& msgChar : _message) {
-        msgChar.draw = false;
-        if (line < _lines) {
-            msgChar.line = line;
-            msgChar.col = col;
-        } else {
-            msgChar.line = 0xFFFF;
-            msgChar.col = 0xFFFF;
-        }
-        if (col == lastCol) {
-            line++;
-            col = firstCol;
-            if (charsRemaining < charsPerCol) {
-                col += (charsPerCol - static_cast<uint16_t>(charsRemaining)) / 2;
-            }
-        } else {
-            col++;
-        }
-        charsRemaining--;
-    }
-}
-
-// Find which chars in the message should be drawn
-void Cloud::CalcMessage() {
-    wchar_t wc[2];
-    for (auto& msgChar : _message) {
-        if (msgChar.line == 0xFFFF || msgChar.col == 0xFFFF)
-            break;
-
-        mvinnwstr(msgChar.line, msgChar.col, wc, 1);
-        if (wc[0] != 0 && wc[0] != ' ')
-            msgChar.draw = true;
-    }
-}
-
-void Cloud::DrawMessage() const {
-    for (const auto& msgChar : _message) {
-        if (!msgChar.draw)
-            continue;
-
-        const attr_t attr = (_boldMode == BoldMode::OFF) ? A_NORMAL : A_BOLD;
-        cchar_t wc = {};
-        wc.attr = attr;
-        wc.chars[0] = msgChar.val;
-        if (_colorMode != ColorMode::MONO)
-            attron(COLOR_PAIR(_numColorPairs));
-
-        mvadd_wch(msgChar.line, msgChar.col, &wc);
-
-        if (_colorMode != ColorMode::MONO)
-            attroff(COLOR_PAIR(_numColorPairs));
     }
 }
