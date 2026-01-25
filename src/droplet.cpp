@@ -25,7 +25,7 @@ Droplet::Droplet() {
 }
 
 Droplet::Droplet(Cloud* cl, uint16_t col, uint16_t endLine, uint16_t cpIdx,
-                 uint16_t len, float cps, milliseconds ttl, bool epochBool) {
+                 uint16_t len, float cps, uint64_t ttlMs, bool epochBool) {
     Reset();
     _pCloud = cl;
     _boundCol = col;
@@ -33,7 +33,8 @@ Droplet::Droplet(Cloud* cl, uint16_t col, uint16_t endLine, uint16_t cpIdx,
     _charPoolIdx = cpIdx;
     _length = len;
     _charsPerSec = cps;
-    _timeToLinger = ttl;
+    _timeToLingerMs = ttlMs;
+    _fractionalChars = 0.0f;
     _epochBool = epochBool;
 }
 
@@ -51,25 +52,32 @@ void Droplet::Reset() {
     _charPoolIdx = 0xFFFF;
     _length = 0xFFFF;
     _charsPerSec = 0.0f;
-    _lastTime = high_resolution_clock::time_point();
-    _headStopTime = high_resolution_clock::time_point();
-    _timeToLinger = milliseconds(0);
+    _lastTimeMs = 0;
+    _headStopTimeMs = 0;
+    _timeToLingerMs = 0;
+    _fractionalChars = 0.0f;
     _epochBool = false;
 }
 
-void Droplet::Activate(high_resolution_clock::time_point curTime) {
+void Droplet::Activate(uint64_t curTimeMs) {
     _isAlive = true;
     _isHeadCrawling = true;
     _isTailCrawling = true;
-    _lastTime = curTime;
+    _lastTimeMs = curTimeMs;
 }
 
-void Droplet::Advance(high_resolution_clock::time_point curTime) {
-    uint64_t elapsedNs = duration_cast<nanoseconds>(curTime - _lastTime).count();
-    const float elapsedSec = elapsedNs / 1.0e9f;
-    uint16_t charsAdvanced = static_cast<uint16_t>(round(_charsPerSec * elapsedSec));
+void Droplet::Advance(uint64_t curTimeMs) {
+    // Calculate elapsed time in milliseconds
+    uint64_t elapsedMs = 0;
+    if (curTimeMs > _lastTimeMs) {
+        elapsedMs = curTimeMs - _lastTimeMs;
+    }
+    const float elapsedSec = static_cast<float>(elapsedMs) / 1000.0f;
+    _fractionalChars += _charsPerSec * elapsedSec;
+    uint16_t charsAdvanced = static_cast<uint16_t>(_fractionalChars);
     if (!charsAdvanced)
         return;
+    _fractionalChars -= charsAdvanced;
 
     // Advance the head
     if (_isHeadCrawling) {
@@ -79,9 +87,9 @@ void Droplet::Advance(high_resolution_clock::time_point curTime) {
         // If head reaches the _endLine, stop the head and maybe the tail too
         if (_headPutLine == _endLine) {
             _isHeadCrawling = false;
-            if (!duration_cast<milliseconds>(_headStopTime.time_since_epoch()).count()) {
-                _headStopTime = curTime;
-                if (_timeToLinger > milliseconds(0)) {
+            if (_headStopTimeMs == 0) {
+                _headStopTimeMs = curTimeMs;
+                if (_timeToLingerMs > 0) {
                     _isTailCrawling = false;
                 }
             }
@@ -104,17 +112,17 @@ void Droplet::Advance(high_resolution_clock::time_point curTime) {
     }
 
     // Restart the tail after lingering
-    if (!_isTailCrawling && duration_cast<milliseconds>(curTime - _headStopTime) >= _timeToLinger) {
+    if (!_isTailCrawling && _headStopTimeMs > 0 && curTimeMs >= _headStopTimeMs + _timeToLingerMs) {
         _isTailCrawling = true;
     }
     // Once tail reaches the head, kill this droplet
     if (_tailPutLine == _headPutLine) {
         _isAlive = false;
     }
-    _lastTime = curTime; // Required or else nothing will ever get drawn...
+    _lastTimeMs = curTimeMs; // Required or else nothing will ever get drawn...
 }
 
-void Droplet::Draw(high_resolution_clock::time_point curTime) {
+void Droplet::Draw(uint64_t curTimeMs) {
     uint16_t startLine = 0;
     if (_tailPutLine != 0xFFFF) {
         // Delete the very end of tail
@@ -130,7 +138,7 @@ void Droplet::Draw(high_resolution_clock::time_point curTime) {
         CharLoc cl = CharLoc::MIDDLE;
         if (_tailPutLine != 0xFFFF && line == _tailPutLine + 1)
             cl = CharLoc::TAIL;
-        if (line == _headPutLine && IsHeadBright(curTime))
+        if (line == _headPutLine && IsHeadBright(curTimeMs))
             cl = CharLoc::HEAD;
 
         // No need to draw chars between tail and _headCurLine
@@ -139,7 +147,7 @@ void Droplet::Draw(high_resolution_clock::time_point curTime) {
             continue;
 
         Cloud::CharAttr attr;
-        _pCloud->GetAttr(line, _boundCol, val, cl, &attr, curTime, _headPutLine, _length);
+        _pCloud->GetAttr(line, _boundCol, val, cl, &attr, curTimeMs, _headPutLine, _length);
 
         attr_t attr2 = attr.isBold ? A_BOLD : A_NORMAL;
         cchar_t wc = {};
@@ -157,16 +165,10 @@ void Droplet::Draw(high_resolution_clock::time_point curTime) {
     _headCurLine = _headPutLine;
 }
 
-void Droplet::IncrementTime(milliseconds time) {
-    _lastTime += time;
-    if (duration_cast<milliseconds>(_headStopTime.time_since_epoch()).count())
-        _headStopTime += time;
-}
-
-bool Droplet::IsHeadBright(high_resolution_clock::time_point curTime) const {
+bool Droplet::IsHeadBright(uint64_t curTimeMs) const {
     if (_isHeadCrawling)
         return true;
-    else if (duration_cast<milliseconds>(curTime - _headStopTime) <= milliseconds(100))
+    else if (_headStopTimeMs > 0 && curTimeMs <= _headStopTimeMs + 100)
         return true;
 
     return false;

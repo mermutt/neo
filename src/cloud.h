@@ -59,7 +59,7 @@ public:
 
     void Rain();
     void SimulateEpoch();
-    void EpochNotch(high_resolution_clock::time_point curTime = high_resolution_clock::now());
+    void EpochNotch(uint64_t curTimeMs = 0);
     void Reset();
 
     struct CharAttr {
@@ -67,7 +67,7 @@ public:
         bool isBold;
     };
     void GetAttr(uint16_t line, uint16_t col, wchar_t val, Droplet::CharLoc ct,
-                 CharAttr* pAttr, high_resolution_clock::time_point time,
+                 CharAttr* pAttr, uint64_t timeMs,
                  uint16_t headPutLine, uint16_t len) const;
 
     float GetCharsPerSec() const { return _charsPerSec; }
@@ -123,9 +123,9 @@ private:
         bool canSpawn; // true if more droplets can be added to this column
     };
     vector<ColumnStatus> _colStat = {};
-    high_resolution_clock::time_point _pauseTime = {};
-    high_resolution_clock::time_point _lastSpawnTime = {};
-    high_resolution_clock::time_point _logicalTime = {};
+    uint64_t _pauseTimeMs = 0;
+    uint64_t _lastSpawnTimeMs = 0;
+    uint64_t _logicalTimeMs = 0;
     uint32_t _currentEpochSeed = 0;
     uint32_t _lastEpochSeed = UINT32_MAX;
     bool _currentEpochBool = false;
@@ -166,7 +166,7 @@ private:
 
     void FillDroplet(Droplet* pDroplet, uint16_t col);
 
-    void SpawnDroplets(high_resolution_clock::time_point curTime);
+    void SpawnDroplets(uint64_t curTimeMs);
     void FillColorMap(size_t screenSize);
 };
 

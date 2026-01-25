@@ -674,31 +674,23 @@ void Profiler(Cloud& cloud) {
 }
 
 void MainLoop(Cloud& cloud, double targetFPS) {
-    const nanoseconds targetPeriod(static_cast<uint64_t>(round(1.0 / targetFPS * 1.0e9)));
-    high_resolution_clock::time_point prevTime = high_resolution_clock::now();
-    high_resolution_clock::time_point curTime;
-    nanoseconds elapsed;
-    nanoseconds prevDelay(5);
-    nanoseconds curDelay;
-    nanoseconds calcDelay;
-
+    // Use fixed 30 FPS for logical time mode
+    const uint64_t targetPeriodMs = static_cast<uint64_t>(1000.0 / 30.0); // ~33ms for 30 FPS
+    auto prevTime = high_resolution_clock::now();
+    
     while (cloud.Raining()) {
         HandleInput(&cloud);
         cloud.Rain();
         if (refresh() != OK)
             Die("refresh() failed\n");
 
-        curTime = high_resolution_clock::now();
-        elapsed = duration_cast<nanoseconds>(curTime - prevTime);
-        if (elapsed >= targetPeriod) {
-            calcDelay = nanoseconds(0);
-        } else {
-            calcDelay = nanoseconds(targetPeriod - elapsed);
+        // Sleep to maintain ~30 FPS
+        auto curTime = high_resolution_clock::now();
+        auto elapsed = duration_cast<milliseconds>(curTime - prevTime);
+        if (elapsed.count() < targetPeriodMs) {
+            std::this_thread::sleep_for(milliseconds(targetPeriodMs - elapsed.count()));
         }
-        curDelay = (7 * prevDelay + calcDelay) / 8;
-        std::this_thread::sleep_for(curDelay);
-        prevTime = curTime;
-        prevDelay = curDelay;
+        prevTime = high_resolution_clock::now();
     }
 }
 

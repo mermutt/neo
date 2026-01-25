@@ -38,8 +38,8 @@ Cloud::Cloud(ColorMode cm, bool def2ascii) :
     _cols(COLS),
     _defaultToAscii(def2ascii),
     _colorMode(cm),
-    _logicalTime(high_resolution_clock::now()),
-    _lastSpawnTime(_logicalTime)
+    _logicalTimeMs(1000), // Start at 1 second so droplets have time to move
+    _lastSpawnTimeMs(0) // Last spawn was at time 0
 {
     assert(stdscr != nullptr);
     if (cm != ColorMode::MONO)
@@ -56,8 +56,8 @@ Cloud::Cloud(const Cloud& other) :
     _dropletDensity(other._dropletDensity),
     _dropletsPerSec(other._dropletsPerSec),
     _colStat(other._colStat),
-    _pauseTime(other._pauseTime),
-    _lastSpawnTime(other._lastSpawnTime),
+    _pauseTimeMs(other._pauseTimeMs),
+    _lastSpawnTimeMs(other._lastSpawnTimeMs),
     _currentEpochSeed(other._currentEpochSeed),
     _lastEpochSeed(other._lastEpochSeed),
     _currentEpochBool(other._currentEpochBool),
@@ -92,7 +92,7 @@ Cloud::Cloud(const Cloud& other) :
     _colorMode(other._colorMode),
     _numColorPairs(other._numColorPairs),
     _usrColors(other._usrColors),
-    _logicalTime(other._logicalTime)
+    _logicalTimeMs(other._logicalTimeMs)
 {
     // Update droplet Cloud pointers to point to this Cloud instance
     for (auto& droplet : _droplets) {
@@ -105,11 +105,11 @@ void Cloud::Rain() {
         return;
 
     // Use logical time for deterministic behavior
-    // Each frame advances logical time by fixed step (e.g., 16.67ms for ~60 FPS)
-    const milliseconds timeStep(1000 / 60);
-    _logicalTime += timeStep;
+    // Each frame advances logical time by fixed step (33.33ms for 30 FPS)
+    const uint64_t timeStepMs = 33; // 1000 / 30 ≈ 33.33ms
+    _logicalTimeMs += timeStepMs;
 
-    EpochNotch(_logicalTime);
+    EpochNotch(_logicalTimeMs);
 
     // Check if we should start a new epoch (after processing deaths)
     if (_dropletsPreviousEpoch == 0) {
@@ -125,29 +125,31 @@ void Cloud::Rain() {
     }
 }
 
+#include <iostream>
+
 void Cloud::SimulateEpoch() {
     // Create a copy of this Cloud for simulation
     Cloud simCloud = *this;
-    
+
     // Enable simulation mode on the copy
     simCloud._simulationMode = true;
-    
+
     // Use next epoch seed for simulation (already incremented in Rain())
     simCloud.mt.seed(_currentEpochSeed);
-    
+
     // Start simulation time from current logical time
-    high_resolution_clock::time_point simTime = _logicalTime;
-    
-    // Simulate with fixed time steps (e.g., 1/60 second)
-    const milliseconds timeStep(1000 / 60);
-    
+    uint64_t simTimeMs = _logicalTimeMs;
+
+    // Simulate with fixed time steps (33ms for 30 FPS)
+    const uint64_t timeStepMs = 33;
+
     // Safety limit to prevent infinite loops
     const size_t maxIterations = 10000;
     size_t iteration = 0;
 
     while (iteration++ < maxIterations) {
-        simTime += timeStep;
-        simCloud.EpochNotch(simTime);
+        simTimeMs += timeStepMs;
+        simCloud.EpochNotch(simTimeMs);
 
         // Check if we reached the end of the epoch.
         if (simCloud._dropletsPreviousEpoch == 0) {
@@ -159,7 +161,7 @@ void Cloud::SimulateEpoch() {
             break;
         }
     }
-    
+
     if (iteration >= maxIterations) {
         // Simulation didn't complete - handle error
         // For now, just continue without simulation data
@@ -170,24 +172,24 @@ void Cloud::SimulateEpoch() {
     // We need to match droplets by index since they should be in same order
     for (size_t i = 0; i < _droplets.size() && i < simCloud._droplets.size(); ++i) {
         _droplets[i].SetSimulationData(
-            simCloud._droplets[i].GetDataOffset(), 
+            simCloud._droplets[i].GetDataOffset(),
             simCloud._droplets[i].GetHeadPutLine()
         );
     }
-    
+
     // Seed RNG for normal mode (same seed used in simulation)
     mt.seed(_currentEpochSeed);
 }
 
-void Cloud::EpochNotch(high_resolution_clock::time_point curTime) {
-    SpawnDroplets(curTime);
+void Cloud::EpochNotch(uint64_t curTimeMs) {
+    SpawnDroplets(curTimeMs);
 
     for (auto& droplet : _droplets) {
         if (!droplet.IsAlive())
             continue;
-        droplet.Advance(curTime);
+        droplet.Advance(curTimeMs);
         if (!_simulationMode) {
-            droplet.Draw(curTime);
+            droplet.Draw(curTimeMs);
         }
         if (!droplet.IsAlive()) {
             auto& cs = _colStat[droplet.GetCol()];
@@ -265,7 +267,7 @@ void Cloud::Reset() {
     SetColumnSpeeds();
     UpdateDropletSpeeds();
 
-    _lastSpawnTime = high_resolution_clock::now();
+    _lastSpawnTimeMs = 0;
     _currentEpochSeed = 0;
 }
 
@@ -306,17 +308,17 @@ void Cloud::FillDroplet(Droplet* pDroplet, uint16_t col) {
     uint16_t len = _lines;
     if (_randChance(mt) <= _shortPct)
         len = _randLen(mt);
-    milliseconds ttl = milliseconds(1);
+    uint64_t ttlMs = 1;
     if (endLine <= len)
-        ttl = milliseconds(_randLingerMs(mt));
+        ttlMs = _randLingerMs(mt);
     const float speed = _colStat[col].maxSpeedPct * _charsPerSec;
-    *pDroplet = Droplet(this, col, endLine, cpIdx, len, speed, ttl, _currentEpochBool);
+    *pDroplet = Droplet(this, col, endLine, cpIdx, len, speed, ttlMs, _currentEpochBool);
     // Newly created droplets are always in the current epoch
     _dropletsCurrentEpoch++;
 }
 
 void Cloud::GetAttr(uint16_t line, uint16_t col, wchar_t val, Droplet::CharLoc ct,
-                    CharAttr* pAttr, high_resolution_clock::time_point time,
+                    CharAttr* pAttr, uint64_t timeMs,
                     uint16_t headPutLine, uint16_t length) const {
     if (_boldMode == BoldMode::RANDOM)
         pAttr->isBold = ((line ^ val) % 2 == 1);
@@ -366,15 +368,13 @@ wchar_t Cloud::GetChar(uint16_t line, uint16_t charPoolIdx) const {
 void Cloud::TogglePause() {
     _pause = !_pause;
     if (_pause) {
-        _pauseTime = high_resolution_clock::now();
+        // In logical time mode, we don't track real pause time
+        // Just mark that we're paused
+        _pauseTimeMs = 0; // Not used in logical time mode
     } else {
-        auto elapsed = duration_cast<milliseconds>(high_resolution_clock::now() - _pauseTime);
-        _lastSpawnTime += elapsed;
-        for (auto& droplet : _droplets) {
-            if (!droplet.IsAlive())
-                continue;
-            droplet.IncrementTime(elapsed);
-        }
+        // When unpausing in logical time mode, we don't need to adjust times
+        // because time advances at fixed increments regardless of real time
+        // No adjustment needed for _lastSpawnTimeMs or droplets
     }
 }
 
@@ -750,9 +750,13 @@ void Cloud::SetColor(Color c) {
         bkgd(COLOR_PAIR(1));
 }
 
-void Cloud::SpawnDroplets(high_resolution_clock::time_point curTime) {
-    const nanoseconds elapsed = duration_cast<nanoseconds>(curTime - _lastSpawnTime);
-    const float elapsedSec = static_cast<float>(elapsed.count() / 1e9);
+void Cloud::SpawnDroplets(uint64_t curTimeMs) {
+    // Calculate elapsed time in milliseconds
+    uint64_t elapsedMs = 0;
+    if (curTimeMs > _lastSpawnTimeMs) {
+        elapsedMs = curTimeMs - _lastSpawnTimeMs;
+    }
+    const float elapsedSec = static_cast<float>(elapsedMs) / 1000.0f;
     const size_t dropletsToSpawn = min(static_cast<size_t>(elapsedSec * _dropletsPerSec),
                                        _numDroplets);
     if (!dropletsToSpawn)
@@ -776,13 +780,13 @@ void Cloud::SpawnDroplets(high_resolution_clock::time_point curTime) {
         if (!dropletToSpawn)
             break;
         FillDroplet(dropletToSpawn, col);
-        dropletToSpawn->Activate(curTime);
+        dropletToSpawn->Activate(curTimeMs);
         _colStat[col].canSpawn = false;
         _colStat[col].numDroplets++;
         dropletsSpawned++;
     }
     if (dropletsSpawned)
-        _lastSpawnTime = curTime;
+        _lastSpawnTimeMs = curTimeMs;
 }
 
 void Cloud::SetDropletDensity(float density) {
