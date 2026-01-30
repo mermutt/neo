@@ -19,6 +19,7 @@
 
 #include "cloud.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstring>
 #include <iostream>
@@ -121,6 +122,7 @@ void Cloud::Rain() {
 
         _currentEpochSeed++;
 
+		CountDropletsAndChars();
         SimulateEpoch();
     }
 }
@@ -165,6 +167,7 @@ void Cloud::SimulateEpoch() {
         // For now, just continue without simulation data
         return;
     }
+	simCloud.CountDropletsAndChars();
 
     // Copy simulation data from simulated droplets to real droplets
     // We need to match droplets by index since they should be in same order
@@ -296,6 +299,37 @@ void Cloud::InitChars() {
             for (wchar_t wchar = segment.first; wchar <= segment.second; wchar++)
                 _charPool.push_back(wchar);
     }
+}
+
+uint32_t Cloud::CountDropletsAndChars() {
+    // Collect pointers to all alive droplets
+    std::vector<Droplet*> aliveDroplets;
+    aliveDroplets.reserve(_droplets.size());
+
+    for (auto& droplet : _droplets) {
+        if (droplet.IsAlive()) {
+            aliveDroplets.push_back(&droplet);
+        }
+    }
+
+    // Sort by column (primary) and tailPutLine (secondary, ascending)
+    std::sort(aliveDroplets.begin(), aliveDroplets.end(),
+        [](const Droplet* a, const Droplet* b) {
+            if (a->GetCol() != b->GetCol()) {
+                return a->GetCol() < b->GetCol();
+            }
+            return a->GetTailPutLine() < b->GetTailPutLine();
+        });
+
+    // Assign dataOffset and topFreezeLine to each droplet
+    uint32_t dataOffset = 0;
+    for (auto* droplet : aliveDroplets) {
+        droplet->SetSimulationData(dataOffset, droplet->GetTailPutLine());
+        uint16_t charCount = droplet->GetHeadPutLine() - droplet->GetTailPutLine() + 1;
+        dataOffset += charCount;
+    }
+
+    return dataOffset;
 }
 
 void Cloud::FillDroplet(Droplet* pDroplet, uint16_t col) {

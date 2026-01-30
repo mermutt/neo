@@ -49,12 +49,12 @@ public:
     uint16_t GetTailPutLine() const { return _tailPutLine; }
     uint16_t GetCharPoolIdx() const { return _charPoolIdx; }
     bool GetEpochBool() const { return _epochBool; }
-    void SetSimulationData(uint16_t dataOffset, uint16_t headFreezeLine) {
+    void SetSimulationData(uint16_t dataOffset, uint16_t topFreezeLine) {
         _dataOffset = dataOffset;
-        _headFreezeLine = headFreezeLine;
+        _topFreezeLine = topFreezeLine;
     }
     uint16_t GetDataOffset() const { return _dataOffset; }
-    uint16_t GetHeadFreezeLine() const { return _headFreezeLine; }
+    uint16_t GetTopFreezeLine() const { return _topFreezeLine; }
     void SetCloud(Cloud* cloud) { _pCloud = cloud; }
 
     enum class CharLoc { // describes where a char is within a Droplet
@@ -72,13 +72,13 @@ private:
     uint16_t _boundCol; // Which screen column this droplet renders to
     uint16_t _headPutLine; // Where we are advancing the head
     uint16_t _headCurLine; // Where the head currently is
-    uint16_t _headFreezeLine; // Where the head was at Epoch end
+    uint16_t _topFreezeLine; // Where the upper char of droplet was at Epoch end
     uint16_t _tailPutLine; // Where we are advancing the tail
     uint16_t _tailCurLine; // The last empty line in this column
     uint16_t _endLine; // The head will not advance past this line
     uint16_t _charPoolIdx; // Index into the "charPool"
     uint16_t _length; // How many chars is this droplet?
-    uint32_t _dataOffset; // Relative offset of head char on screen
+    uint32_t _dataOffset; // Relative offset of top char on screen
     float _charsPerSec; // How many chars will be drawn per second
     uint64_t _lastTimeMs = 0; // Last time we drew something (milliseconds)
     uint64_t _headStopTimeMs = 0; // Time when head stopped (milliseconds)

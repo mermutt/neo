@@ -112,6 +112,8 @@ public:
     void SetMaxDropletsPerColumn(uint8_t val) { _maxDropletsPerColumn = val; }
     void SetUserColors(vector<ColorContent>&& vals) { _usrColors = std::move(vals); }
 
+    uint32_t CountDropletsAndChars();
+
 private:
     vector<Droplet> _droplets = {};
     size_t _numDroplets = 0;
