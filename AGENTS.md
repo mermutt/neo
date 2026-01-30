@@ -8,8 +8,8 @@
 
 ### Build System & Dependencies
 - **Build System**: Autotools (autoconf/automake)
-- **Compiler**: C++11 compatible (g++ or clang++)
-- **Dependencies**: 
+- **Compiler**: C++17 compatible (g++ or clang++)
+- **Dependencies**:
   - `libncursesw-dev` (wide character ncurses)
   - `build-essential` (make, g++)
   - `autoconf` (for building from repo)
@@ -53,7 +53,7 @@ neo/
 
 #### `src/cloud.h`
 - **Cloud Class**: Main controller class
-- **Key Methods**: 
+- **Key Methods**:
   - `Rain()`: Main animation loop
   - `GetAttr()`: Character attribute calculation
   - `SetColor()`, `SetCharsPerSec()`: Configuration
