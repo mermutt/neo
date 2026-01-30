@@ -27,6 +27,11 @@
 
 #include <random>
 #include <vector>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <dirent.h>
 
 #ifdef __APPLE__
     #define _XOPEN_SOURCE_EXTENDED 1
@@ -73,6 +78,9 @@ public:
     float GetCharsPerSec() const { return _charsPerSec; }
     void SetCharsPerSec(float cps);
     wchar_t GetChar(uint16_t line, uint16_t charPoolIdx) const;
+    void SetMemoryMappedFile(const char* data, size_t size);
+    const char* GetMemoryMappedData() const { return _mmapData; }
+    size_t GetMemoryMappedSize() const { return _mmapSize; }
 
     static constexpr size_t CHAR_POOL_SIZE = 2048;
 
@@ -163,6 +171,11 @@ private:
     ColorMode _colorMode = ColorMode::MONO;
     int _numColorPairs = 7;
     vector<ColorContent> _usrColors = {};
+
+    // Memory mapped file support
+    const char* _mmapData = nullptr;
+    size_t _mmapSize = 0;
+    size_t _mmapOffset = 0;
 
     void FillDroplet(Droplet* pDroplet, uint16_t col);
 

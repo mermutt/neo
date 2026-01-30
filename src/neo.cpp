@@ -31,6 +31,12 @@
 #include <random>
 #include <thread>
 #include <utility>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <dirent.h>
+#include <algorithm>
 
 #ifdef __APPLE__
     #define _XOPEN_SOURCE_EXTENDED 1
@@ -356,6 +362,71 @@ void PrintVersion() {
            "Warner Bros. Entertainment Inc., Village Roadshow Pictures, Silver Pictures,\n"
            "nor any of their parent companies, subsidiaries, partners, or affiliates.\n");
     exit(0);
+}
+
+// Find the latest file in a directory
+static string FindLatestFile(const string& directory) {
+    DIR* dir = opendir(directory.c_str());
+    if (!dir) {
+        return "";
+    }
+
+    string latestFile;
+    time_t latestTime = 0;
+    struct dirent* entry;
+    
+    while ((entry = readdir(dir)) != nullptr) {
+        if (entry->d_name[0] == '.') {
+            continue; // Skip hidden files
+        }
+        
+        string fullPath = directory + "/" + entry->d_name;
+        struct stat fileStat;
+        if (stat(fullPath.c_str(), &fileStat) == 0) {
+            if (S_ISREG(fileStat.st_mode)) {
+                if (fileStat.st_mtime > latestTime) {
+                    latestTime = fileStat.st_mtime;
+                    latestFile = fullPath;
+                }
+            }
+        }
+    }
+    
+    closedir(dir);
+    return latestFile;
+}
+
+// Memory map a file
+static pair<const char*, size_t> MemoryMapFile(const string& filename) {
+    if (filename.empty()) {
+        return {nullptr, 0};
+    }
+    
+    int fd = open(filename.c_str(), O_RDONLY);
+    if (fd == -1) {
+        return {nullptr, 0};
+    }
+    
+    struct stat fileStat;
+    if (fstat(fd, &fileStat) == -1) {
+        close(fd);
+        return {nullptr, 0};
+    }
+    
+    size_t fileSize = fileStat.st_size;
+    if (fileSize == 0) {
+        close(fd);
+        return {nullptr, 0};
+    }
+    
+    void* mapped = mmap(nullptr, fileSize, PROT_READ, MAP_PRIVATE, fd, 0);
+    close(fd);
+    
+    if (mapped == MAP_FAILED) {
+        return {nullptr, 0};
+    }
+    
+    return {static_cast<const char*>(mapped), fileSize};
 }
 
 void PrintHelp(bool bErr, const char* appName) {
@@ -713,6 +784,22 @@ int main(int argc, char* argv[]) {
     bool profiling = false;
     Cloud cloud(colorMode, ascii);
     ParseArgs(argc, argv, &cloud, &targetFPS, &profiling);
+    
+    // Find and memory map the latest file in ~/prjs/snapshots/
+    const char* homeDir = getenv("HOME");
+    string latestFile;
+    if (homeDir) {
+        string snapshotDir = string(homeDir) + "/prjs/snapshots";
+        latestFile = FindLatestFile(snapshotDir);
+    }
+    
+    if (!latestFile.empty()) {
+        pair<const char*, size_t> mmapResult = MemoryMapFile(latestFile);
+        if (mmapResult.first && mmapResult.second > 0) {
+            cloud.SetMemoryMappedFile(mmapResult.first, mmapResult.second);
+        }
+    }
+    
     cloud.InitChars();
     cloud.Reset();
 
@@ -722,6 +809,11 @@ int main(int argc, char* argv[]) {
         MainLoop(cloud, targetFPS);
 
     Cleanup();
+
+    // Clean up memory mapped file if any
+    if (cloud.GetMemoryMappedData()) {
+        munmap(const_cast<char*>(cloud.GetMemoryMappedData()), cloud.GetMemoryMappedSize());
+    }
 
     return 0;
 }

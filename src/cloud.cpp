@@ -125,8 +125,6 @@ void Cloud::Rain() {
     }
 }
 
-#include <iostream>
-
 void Cloud::SimulateEpoch() {
     // Create a copy of this Cloud for simulation
     Cloud simCloud = *this;
@@ -361,8 +359,21 @@ void Cloud::SetCharsPerSec(float cps) {
 }
 
 wchar_t Cloud::GetChar(uint16_t line, uint16_t charPoolIdx) const {
-    const size_t charIdx = (charPoolIdx + line) % _charPool.size();
-    return _charPool[charIdx];
+    if (_mmapData) {
+        // Read from memory mapped file
+        size_t index = (_mmapOffset + charPoolIdx + line) % _mmapSize;
+        return static_cast<wchar_t>(_mmapData[index]);
+    } else {
+        // Original behavior
+        const size_t charIdx = (charPoolIdx + line) % _charPool.size();
+        return _charPool[charIdx];
+    }
+}
+
+void Cloud::SetMemoryMappedFile(const char* data, size_t size) {
+    _mmapData = data;
+    _mmapSize = size;
+    _mmapOffset = 0;
 }
 
 void Cloud::TogglePause() {
