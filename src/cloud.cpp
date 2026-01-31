@@ -105,6 +105,8 @@ void Cloud::Rain() {
     if (_pause)
         return;
 
+    static uint32_t num_bytes_predicted = UINT32_MAX;
+
     // Use logical time for deterministic behavior
     // Each frame advances logical time by fixed step (33.33ms for 30 FPS)
     const uint64_t timeStepMs = 33; // 1000 / 30 ≈ 33.33ms
@@ -122,12 +124,15 @@ void Cloud::Rain() {
 
         _currentEpochSeed++;
 
-		CountDropletsAndChars();
-        SimulateEpoch();
+		uint32_t num_bytes_actually = CountDropletsAndChars();
+		if (num_bytes_predicted != UINT32_MAX) {
+		    std::cout << "predicted: " << num_bytes_predicted << ", actually: " << num_bytes_actually << std::endl;
+		}
+        num_bytes_predicted = SimulateEpoch();
     }
 }
 
-void Cloud::SimulateEpoch() {
+uint32_t Cloud::SimulateEpoch() {
     // Create a copy of this Cloud for simulation
     Cloud simCloud = *this;
 
@@ -165,9 +170,9 @@ void Cloud::SimulateEpoch() {
     if (iteration >= maxIterations) {
         // Simulation didn't complete - handle error
         // For now, just continue without simulation data
-        return;
+        return UINT32_MAX;
     }
-	simCloud.CountDropletsAndChars();
+    uint32_t predicted = simCloud.CountDropletsAndChars();
 
     // Copy simulation data from simulated droplets to real droplets
     // We need to match droplets by index since they should be in same order
@@ -180,6 +185,8 @@ void Cloud::SimulateEpoch() {
 
     // Seed RNG for normal mode (same seed used in simulation)
     mt.seed(_currentEpochSeed);
+
+    return predicted;
 }
 
 void Cloud::EpochNotch(uint64_t curTimeMs) {

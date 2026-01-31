@@ -63,7 +63,7 @@ public:
     };
 
     void Rain();
-    void SimulateEpoch();
+    uint32_t SimulateEpoch();
     void EpochNotch(uint64_t curTimeMs = 0);
     void Reset();
 
