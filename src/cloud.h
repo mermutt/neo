@@ -136,6 +136,7 @@ private:
     uint64_t _pauseTimeMs = 0;
     uint64_t _lastSpawnTimeMs = 0;
     uint64_t _logicalTimeMs = 0;
+    static constexpr uint64_t _timeStepMs = 33; // Use logical time for deterministic behavior. 1000 / 30 ≈ 33.33ms
     uint32_t _currentEpochSeed = 0;
     uint32_t _lastEpochSeed = UINT32_MAX;
     bool _currentEpochBool = false;

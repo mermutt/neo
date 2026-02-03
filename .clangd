@@ -1,0 +1,18 @@
+CompileFlags:
+  Add: [-std=c++17, -DNCURSES_WIDECHAR]
+  
+Diagnostics:
+  ClangTidy:
+    Add: [
+      bugprone-*,
+      cert-*,
+      cppcoreguidelines-*,
+      misc-*,
+      modernize-*,
+      performance-*,
+      portability-*,
+      readability-*,
+    ]
+    
+Index:
+  Background: Skip

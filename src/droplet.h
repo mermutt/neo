@@ -40,6 +40,7 @@ public:
     void Activate(uint64_t curTimeMs);
     void Advance(uint64_t curTimeMs);
     void Draw(uint64_t curTimeMs);
+    void SyncCurLine();  // Sync curLine to putLine after Draw()
 
     // Getters/Setters/Convenience
     bool IsAlive() const { return _isAlive; }

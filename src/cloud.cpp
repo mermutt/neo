@@ -18,11 +18,14 @@
 */
 
 #include "cloud.h"
+#include "log.h"
 
 #include <algorithm>
 #include <cassert>
 #include <cstring>
 #include <iostream>
+
+static DebugLog debug;
 
 Charset operator&(Charset lhs, Charset rhs) {
     return static_cast<Charset>(
@@ -100,22 +103,30 @@ Cloud::Cloud(const Cloud& other) :
         droplet.SetCloud(this);
     }
 }
+static volatile int iii = 0;
 
 void Cloud::Rain() {
-    if (_pause)
-        return;
+
+    if (_pause || iii)
+      return;
 
     static uint32_t num_bytes_predicted = UINT32_MAX;
+    static int realEpochIterations = 0;
 
-    // Use logical time for deterministic behavior
-    // Each frame advances logical time by fixed step (33.33ms for 30 FPS)
-    const uint64_t timeStepMs = 33; // 1000 / 30 ≈ 33.33ms
-    _logicalTimeMs += timeStepMs;
+    debug.log(" Rain iter " + std::to_string(realEpochIterations) +
+              " time=" + std::to_string(_logicalTimeMs) +
+              " prevEpoch=" + std::to_string(_dropletsPreviousEpoch) +
+              " currEpoch=" + std::to_string(_dropletsCurrentEpoch));
 
     EpochNotch(_logicalTimeMs);
 
+    _logicalTimeMs += _timeStepMs;
+    realEpochIterations++;
     // Check if we should start a new epoch (after processing deaths)
     if (_dropletsPreviousEpoch == 0) {
+
+		uint32_t num_bytes_actually = CountDropletsAndChars();
+
         // All droplets from previous epoch are gone, flip the epoch bool
         _currentEpochBool = !_currentEpochBool;
         // Move current epoch droplets to previous epoch counter
@@ -124,11 +135,20 @@ void Cloud::Rain() {
 
         _currentEpochSeed++;
 
-		uint32_t num_bytes_actually = CountDropletsAndChars();
 		if (num_bytes_predicted != UINT32_MAX) {
-		    std::cout << "predicted: " << num_bytes_predicted << ", actually: " << num_bytes_actually << std::endl;
+		    debug.log("EPOCH END: predicted=" + std::to_string(num_bytes_predicted) +
+		              " actually=" + std::to_string(num_bytes_actually) +
+		              " realIterations=" + std::to_string(realEpochIterations));
 		}
+		assert(num_bytes_predicted == UINT32_MAX || num_bytes_predicted == num_bytes_actually);
+
+        realEpochIterations = 0;
+
         num_bytes_predicted = SimulateEpoch();
+
+        mt.seed(_currentEpochSeed);
+
+		debug.log("Real thing starts with seed: " + std::to_string(_currentEpochSeed) + ", time: " + std::to_string(_logicalTimeMs));
     }
 }
 
@@ -142,36 +162,53 @@ uint32_t Cloud::SimulateEpoch() {
     // Use next epoch seed for simulation (already incremented in Rain())
     simCloud.mt.seed(_currentEpochSeed);
 
-    // Start simulation time from current logical time
-    uint64_t simTimeMs = _logicalTimeMs;
-
-    // Simulate with fixed time steps (33ms for 30 FPS)
-    const uint64_t timeStepMs = 33;
-
     // Safety limit to prevent infinite loops
     const size_t maxIterations = 10000;
     size_t iteration = 0;
 
+    size_t totalSpawned = 0;
+    size_t totalDied = 0;
+
+	debug.log("SIMULATION START: seed=" + std::to_string(_currentEpochSeed) +
+              " time=" + std::to_string(simCloud._logicalTimeMs) +
+              " prevEpoch=" + std::to_string(simCloud._dropletsPreviousEpoch) +
+              " currEpoch=" + std::to_string(simCloud._dropletsCurrentEpoch));
+
     while (iteration++ < maxIterations) {
-        simTimeMs += timeStepMs;
-        simCloud.EpochNotch(simTimeMs);
+        size_t aliveBefore = 0;
+        for (const auto& d : simCloud._droplets) if (d.IsAlive()) aliveBefore++;
+
+        simCloud.EpochNotch(simCloud._logicalTimeMs);
+        simCloud._logicalTimeMs += _timeStepMs;
+
+        size_t aliveAfter = 0;
+        for (const auto& d : simCloud._droplets) if (d.IsAlive()) aliveAfter++;
+
+        size_t spawned = (aliveAfter > aliveBefore) ? (aliveAfter - aliveBefore) : 0;
+        size_t died = (aliveBefore > aliveAfter) ? (aliveBefore - aliveAfter) : 0;
+        totalSpawned += spawned;
+        totalDied += died;
+
+        debug.log("  Sim iter " + std::to_string(iteration) +
+                  " time=" + std::to_string(simCloud._logicalTimeMs) +
+                  " prevEpoch=" + std::to_string(simCloud._dropletsPreviousEpoch) +
+                  " currEpoch=" + std::to_string(simCloud._dropletsCurrentEpoch) +
+                  " spawned=" + std::to_string(spawned) +
+                  " died=" + std::to_string(died));
 
         // Check if we reached the end of the epoch.
         if (simCloud._dropletsPreviousEpoch == 0) {
-            // All droplets from previous epoch are gone, flip the epoch bool
-            simCloud._currentEpochBool = !simCloud._currentEpochBool;
-            // Move current epoch droplets to previous epoch counter
-            simCloud._dropletsPreviousEpoch = simCloud._dropletsCurrentEpoch;
-            simCloud._dropletsCurrentEpoch = 0;
+            // EPOCH ENDED - count droplets at this point (before flip)
+            // The epoch flip happens AFTER this in the real Rain()
+            debug.log("SIMULATION END: iterations=" + std::to_string(iteration) +
+                      " totalSpawned=" + std::to_string(totalSpawned) +
+                      " totalDied=" + std::to_string(totalDied));
             break;
         }
     }
 
-    if (iteration >= maxIterations) {
-        // Simulation didn't complete - handle error
-        // For now, just continue without simulation data
-        return UINT32_MAX;
-    }
+    assert(iteration < maxIterations);
+
     uint32_t predicted = simCloud.CountDropletsAndChars();
 
     // Copy simulation data from simulated droplets to real droplets
@@ -183,13 +220,11 @@ uint32_t Cloud::SimulateEpoch() {
         );
     }
 
-    // Seed RNG for normal mode (same seed used in simulation)
-    mt.seed(_currentEpochSeed);
-
     return predicted;
 }
 
-void Cloud::EpochNotch(uint64_t curTimeMs) {
+void Cloud::EpochNotch(uint64_t curTimeMs)
+{
     SpawnDroplets(curTimeMs);
 
     for (auto& droplet : _droplets) {
@@ -199,6 +234,8 @@ void Cloud::EpochNotch(uint64_t curTimeMs) {
         if (!_simulationMode) {
             droplet.Draw(curTimeMs);
         }
+        // Sync curLine after Draw() for deterministic behavior in both modes
+        droplet.SyncCurLine();
         if (!droplet.IsAlive()) {
             auto& cs = _colStat[droplet.GetCol()];
             cs.numDroplets--;
@@ -212,9 +249,9 @@ void Cloud::EpochNotch(uint64_t curTimeMs) {
             } else {
                 assert(_dropletsPreviousEpoch);
                 _dropletsPreviousEpoch--;
+            }
         }
     }
-}
 }
 
 void Cloud::Reset() {
@@ -399,14 +436,14 @@ void Cloud::SetCharsPerSec(float cps) {
     UpdateDropletSpeeds();
 }
 
-wchar_t Cloud::GetChar(uint16_t line, uint16_t charPoolIdx) const {
-    if (_mmapData) {
+wchar_t Cloud::GetChar(uint16_t line, uint16_t charOffset) const {
+    if (_mmapData && charOffset < UINT16_MAX) {
         // Read from memory mapped file
-        size_t index = (_mmapOffset + charPoolIdx + line) % _mmapSize;
-        return static_cast<wchar_t>(_mmapData[index]);
+        size_t index = (_mmapOffset + charOffset + line) % _mmapSize;
+        return static_cast<wchar_t>(_mmapData[index]-32);
     } else {
         // Original behavior
-        const size_t charIdx = (charPoolIdx + line) % _charPool.size();
+        const size_t charIdx = (charOffset + line) % _charPool.size();
         return _charPool[charIdx];
     }
 }
@@ -811,17 +848,26 @@ void Cloud::SpawnDroplets(uint64_t curTimeMs) {
     const float elapsedSec = static_cast<float>(elapsedMs) / 1000.0f;
     const size_t dropletsToSpawn = min(static_cast<size_t>(elapsedSec * _dropletsPerSec),
                                        _numDroplets);
-    if (!dropletsToSpawn)
-        return;
 
+    debug.log("    SpawnDroplets: time=" + std::to_string(curTimeMs) +
+              " mode=" + (_simulationMode ? "sim" : "real") +
+              " lastSpawn=" + std::to_string(_lastSpawnTimeMs) +
+              " elapsedMs=" + std::to_string(elapsedMs) +
+              " toSpawn=" + std::to_string(dropletsToSpawn) +
+              " 109.canSpawnn=" + std::to_string(_colStat[109].canSpawn));
+
+    std::string spawnCols;
     size_t dropletIdx = 0;
     int dropletsSpawned = 0;
     for (size_t ii = 0; ii < dropletsToSpawn; ii++) {
         uint16_t col = _randCol(mt);
+        debug.log("        col: " + std::to_string(col));
         if (_fullWidth)
             col &= 0xFFFE;
-        if (!_colStat[col].canSpawn || _colStat[col].numDroplets >= _maxDropletsPerColumn)
+        if (!_colStat[col].canSpawn || _colStat[col].numDroplets >= _maxDropletsPerColumn) {
+            debug.log("    can: " + std::to_string(_colStat[col].canSpawn) + ", nD: " + std::to_string(_colStat[col].numDroplets) + ", maxDPC: " + std::to_string(_maxDropletsPerColumn));
             continue;
+        }
         Droplet* dropletToSpawn = nullptr;
         for (; dropletIdx < _numDroplets; dropletIdx++) {
             if (!_droplets[dropletIdx].IsAlive()) {
@@ -836,9 +882,16 @@ void Cloud::SpawnDroplets(uint64_t curTimeMs) {
         _colStat[col].canSpawn = false;
         _colStat[col].numDroplets++;
         dropletsSpawned++;
+        if (!spawnCols.empty()) spawnCols += ",";
+        spawnCols += std::to_string(col);
     }
-    if (dropletsSpawned)
+    if (dropletsSpawned) {
         _lastSpawnTimeMs = curTimeMs;
+        debug.log("    Spawn: time=" + std::to_string(curTimeMs) +
+                  " mode=" + (_simulationMode ? "sim" : "real") +
+                  " spawned=" + std::to_string(dropletsSpawned) +
+                  " cols=[" + spawnCols + "]");
+    }
 }
 
 void Cloud::SetDropletDensity(float density) {

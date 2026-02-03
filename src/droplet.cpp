@@ -79,6 +79,10 @@ void Droplet::Advance(uint64_t curTimeMs) {
         return;
     _fractionalChars -= charsAdvanced;
 
+    // Save old curLine values for threshold detection and Draw() optimization
+    uint16_t oldTailCurLine = _tailCurLine;
+    uint16_t oldHeadCurLine = _headCurLine;
+
     // Advance the head
     if (_isHeadCrawling) {
         _headPutLine += charsAdvanced;
@@ -107,7 +111,7 @@ void Droplet::Advance(uint64_t curTimeMs) {
 
         // If the tail advances far enough down the screen, allow other droplets to spawn
         const uint16_t threshLine = _pCloud->GetLines() / 4;
-        if (_tailCurLine <= threshLine && _tailPutLine > threshLine)
+        if (oldTailCurLine <= threshLine && _tailPutLine > threshLine)
             _pCloud->SetColumnSpawn(_boundCol, true);
     }
 
@@ -122,6 +126,15 @@ void Droplet::Advance(uint64_t curTimeMs) {
     _lastTimeMs = curTimeMs; // Required or else nothing will ever get drawn...
 }
 
+void Droplet::SyncCurLine() {
+    // Sync curLine to putLine - called after Draw() for deterministic behavior
+    _headCurLine = _headPutLine;
+    // Only sync tail curLine if tail has started moving (putLine is valid)
+    // This ensures Draw() clearing loop works correctly
+    if (_tailPutLine != 0xFFFF)
+        _tailCurLine = _tailPutLine;
+}
+
 void Droplet::Draw(uint64_t curTimeMs) {
     uint16_t startLine = 0;
     if (_tailPutLine != 0xFFFF) {
@@ -129,11 +142,11 @@ void Droplet::Draw(uint64_t curTimeMs) {
         for (uint16_t line = _tailCurLine; line <= _tailPutLine; line++) {
             mvaddch(line, _boundCol, ' ');
         }
-        _tailCurLine = _tailPutLine;
+        // Note: _tailCurLine is now updated in Advance() for deterministic behavior
         startLine = _tailPutLine + 1;
     }
     for (uint16_t line = startLine; line <= _headPutLine; line++) {
-        const wchar_t val = _pCloud->GetChar(line, _charPoolIdx);
+        const wchar_t val = _pCloud->GetChar(line, line < _topFreezeLine ? UINT16_MAX : _dataOffset);
 
         CharLoc cl = CharLoc::MIDDLE;
         if (_tailPutLine != 0xFFFF && line == _tailPutLine + 1)
@@ -162,7 +175,7 @@ void Droplet::Draw(uint64_t curTimeMs) {
             mvadd_wch(line, _boundCol, &wc);
         }
     }
-    _headCurLine = _headPutLine;
+    // Note: _headCurLine is now updated in Advance() for deterministic behavior
 }
 
 bool Droplet::IsHeadBright(uint64_t curTimeMs) const {
