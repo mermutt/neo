@@ -77,7 +77,7 @@ public:
 
     float GetCharsPerSec() const { return _charsPerSec; }
     void SetCharsPerSec(float cps);
-    wchar_t GetChar(uint16_t line, uint16_t charPoolIdx) const;
+    wchar_t GetChar(uint16_t line, uint16_t charPoolIdx, uint16_t dataOffset) const;
     void SetMemoryMappedFile(const char* data, size_t size);
     const char* GetMemoryMappedData() const { return _mmapData; }
     size_t GetMemoryMappedSize() const { return _mmapSize; }

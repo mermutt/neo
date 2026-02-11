@@ -374,12 +374,12 @@ static string FindLatestFile(const string& directory) {
     string latestFile;
     time_t latestTime = 0;
     struct dirent* entry;
-    
+
     while ((entry = readdir(dir)) != nullptr) {
         if (entry->d_name[0] == '.') {
             continue; // Skip hidden files
         }
-        
+
         string fullPath = directory + "/" + entry->d_name;
         struct stat fileStat;
         if (stat(fullPath.c_str(), &fileStat) == 0) {
@@ -391,7 +391,7 @@ static string FindLatestFile(const string& directory) {
             }
         }
     }
-    
+
     closedir(dir);
     return latestFile;
 }
@@ -401,31 +401,31 @@ static pair<const char*, size_t> MemoryMapFile(const string& filename) {
     if (filename.empty()) {
         return {nullptr, 0};
     }
-    
+
     int fd = open(filename.c_str(), O_RDONLY);
     if (fd == -1) {
         return {nullptr, 0};
     }
-    
+
     struct stat fileStat;
     if (fstat(fd, &fileStat) == -1) {
         close(fd);
         return {nullptr, 0};
     }
-    
+
     size_t fileSize = fileStat.st_size;
     if (fileSize == 0) {
         close(fd);
         return {nullptr, 0};
     }
-    
+
     void* mapped = mmap(nullptr, fileSize, PROT_READ, MAP_PRIVATE, fd, 0);
     close(fd);
-    
+
     if (mapped == MAP_FAILED) {
         return {nullptr, 0};
     }
-    
+
     return {static_cast<const char*>(mapped), fileSize};
 }
 
@@ -748,7 +748,7 @@ void MainLoop(Cloud& cloud, double targetFPS) {
     // Use fixed 30 FPS for logical time mode
     const uint64_t targetPeriodMs = static_cast<uint64_t>(1000.0 / 30.0); // ~33ms for 30 FPS
     auto prevTime = high_resolution_clock::now();
-    
+
     while (cloud.Raining()) {
         HandleInput(&cloud);
         cloud.Rain();
@@ -784,7 +784,7 @@ int main(int argc, char* argv[]) {
     bool profiling = false;
     Cloud cloud(colorMode, ascii);
     ParseArgs(argc, argv, &cloud, &targetFPS, &profiling);
-    
+
     // Find and memory map the latest file in ~/prjs/snapshots/
     const char* homeDir = getenv("HOME");
     string latestFile;
@@ -792,14 +792,14 @@ int main(int argc, char* argv[]) {
         string snapshotDir = string(homeDir) + "/prjs/snapshots";
         latestFile = FindLatestFile(snapshotDir);
     }
-    
+
     if (!latestFile.empty()) {
         pair<const char*, size_t> mmapResult = MemoryMapFile(latestFile);
         if (mmapResult.first && mmapResult.second > 0) {
             cloud.SetMemoryMappedFile(mmapResult.first, mmapResult.second);
         }
     }
-    
+
     cloud.InitChars();
     cloud.Reset();
 

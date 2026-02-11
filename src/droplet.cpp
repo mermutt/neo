@@ -20,6 +20,9 @@
 #include "droplet.h"
 #include "cloud.h"
 
+#include "log.h"
+extern DebugLog debug;
+
 Droplet::Droplet() {
     Reset();
 }
@@ -145,8 +148,13 @@ void Droplet::Draw(uint64_t curTimeMs) {
         // Note: _tailCurLine is now updated in Advance() for deterministic behavior
         startLine = _tailPutLine + 1;
     }
+    // if (_boundCol == 0) {
+    //     debug.log("  _boundCol: " + std::to_string(_boundCol));
+    //     debug.log("    startLine: " + std::to_string(startLine) + ", _headPutLine: " + std::to_string(_headPutLine) + ", _dataOffset: " + std::to_string(_dataOffset) + ", _topFreezeLine: " +  std::to_string(_topFreezeLine));
+    // }
+
     for (uint16_t line = startLine; line <= _headPutLine; line++) {
-        const wchar_t val = _pCloud->GetChar(line, line < _topFreezeLine ? UINT16_MAX : _dataOffset);
+        const wchar_t val = _pCloud->GetChar(line, _charPoolIdx, line >= _topFreezeLine ? _dataOffset + line - _topFreezeLine : UINT16_MAX);
 
         CharLoc cl = CharLoc::MIDDLE;
         if (_tailPutLine != 0xFFFF && line == _tailPutLine + 1)
