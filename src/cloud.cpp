@@ -498,12 +498,12 @@ void Cloud::SetColor(Color c) {
         }
         case Color::GREEN: {
             if (_colorMode == ColorMode::TRUECOLOR) {
-                init_color(234, 71, 141, 83);
-                init_color(22, 149, 243, 161);
-                init_color(28, 188, 596, 318);
-                init_color(35, 188, 714, 397);
-                init_color(78, 227, 925, 561);
-                init_color(84, 271, 973, 667);
+                init_color(234, 188, 596, 318);
+                init_color(22, 268, 663, 422);
+                init_color(28, 348, 731, 526);
+                init_color(35, 428, 798, 630);
+                init_color(78, 508, 866, 734);
+                init_color(84, 588, 933, 838);
                 init_color(159, 667, 1000, 941);
             }
             if (_colorMode == ColorMode::COLOR16) {
