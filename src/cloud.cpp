@@ -372,9 +372,9 @@ uint32_t Cloud::CountDropletsAndChars() {
     for (auto* droplet : aliveDroplets) {
         droplet->SetSimulationData(
             dataOffset,
-            droplet->GetTailPutLine() < UINT16_MAX ? droplet->GetTailPutLine() : 0
+            droplet->GetTailPutLine() < UINT16_MAX ? droplet->GetTailPutLine() + 1: 0
         );
-        uint16_t charCount = droplet->GetHeadPutLine() - droplet->GetTailPutLine() + 1;
+        uint16_t charCount = droplet->GetHeadPutLine() - droplet->GetTailPutLine();
         dataOffset += charCount;
     }
     return dataOffset;
