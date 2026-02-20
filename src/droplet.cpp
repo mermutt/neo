@@ -60,6 +60,8 @@ void Droplet::Reset() {
     _timeToLingerMs = 0;
     _fractionalChars = 0.0f;
     _epochBool = false;
+    _dataOffset = 0xFFFFFFFF;
+    _topFreezeLine = 0xFFFF;
 }
 
 void Droplet::Activate(uint64_t curTimeMs) {

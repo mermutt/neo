@@ -24,6 +24,8 @@
 #include <cassert>
 #include <cstring>
 #include <iostream>
+#include <fstream>
+#include <iomanip>
 
 DebugLog debug;
 
@@ -134,6 +136,71 @@ void Cloud::Rain() {
 		    debug.log("EPOCH END: predicted=" + std::to_string(num_bytes_predicted) +
 		              " actually=" + std::to_string(num_bytes_actually) +
 		              " realIterations=" + std::to_string(realEpochIterations));
+
+		    // Epoch number for file naming (current epoch seed was already incremented)
+		    uint32_t epochNum = _currentEpochSeed - 1;
+
+		    // 1. Write screen to file screen-N.txt
+		    std::string screenFilename = "screen-" + std::to_string(epochNum) + ".txt";
+		    std::ofstream screenFile(screenFilename);
+		    if (screenFile.is_open()) {
+		        for (int row = 0; row < _lines; row++) {
+		            for (int col = 0; col < _cols; col++) {
+		                chtype ch = mvinch(row, col);
+		                char c = static_cast<char>(ch & A_CHARTEXT);
+		                screenFile << c;
+		            }
+		            screenFile << '\n';
+		        }
+		        screenFile.close();
+		    }
+
+		    // 2. Write droplets array to file, sorted: alive first, then by column
+		    std::string dropletsFilename = "droplets-" + std::to_string(epochNum) + ".txt";
+		    std::ofstream dropletsFile(dropletsFilename);
+		    if (dropletsFile.is_open()) {
+		        // Create a vector of indices and sort them
+		        std::vector<size_t> indices(_droplets.size());
+		        for (size_t i = 0; i < indices.size(); i++) {
+		            indices[i] = i;
+		        }
+
+		        // Sort: alive first, then by column
+		        std::sort(indices.begin(), indices.end(), [this](size_t a, size_t b) {
+		            bool aliveA = _droplets[a].IsAlive();
+		            bool aliveB = _droplets[b].IsAlive();
+		            if (aliveA != aliveB) {
+		                return aliveA > aliveB; // alive first
+		            }
+		            return _droplets[a].GetCol() < _droplets[b].GetCol();
+                    if (_droplets[a].GetCol() != _droplets[b].GetCol()) {
+                        return _droplets[a].GetCol() < _droplets[b].GetCol();
+                    }
+                    return _droplets[a].GetTailPutLine() == UINT16_MAX ?
+                           true :
+                           _droplets[b].GetTailPutLine() == UINT16_MAX ?
+                           false :
+                           _droplets[a].GetTailPutLine() < _droplets[b].GetTailPutLine();
+		        });
+
+		        // Write header
+		        dropletsFile << "Droplet Index | Alive | Column | HeadLine | TailLine | DataOffset | TopFreezeLine\n";
+		        dropletsFile << "--------------------------------------------------------------------------------\n";
+
+		        // Write droplet data
+		        for (size_t idx : indices) {
+		            const Droplet& d = _droplets[idx];
+		            dropletsFile << std::setw(13) << idx << " | "
+		                         << std::setw(5) << (d.IsAlive() ? "true" : "false") << " | "
+		                         << std::setw(6) << d.GetCol() << " | "
+		                         << std::setw(8) << d.GetHeadPutLine() << " | "
+		                         << std::setw(8) << d.GetTailPutLine() << " | "
+		                         << std::setw(10) << d.GetDataOffset() << " | "
+		                         << std::setw(13) << d.GetTopFreezeLine() << "\n";
+		        }
+
+		        dropletsFile.close();
+		    }
 		}
 		assert(num_bytes_predicted == UINT32_MAX || num_bytes_predicted == num_bytes_actually);
 
@@ -364,7 +431,11 @@ uint32_t Cloud::CountDropletsAndChars() {
             if (a->GetCol() != b->GetCol()) {
                 return a->GetCol() < b->GetCol();
             }
-            return a->GetTailPutLine() < b->GetTailPutLine();
+            return a->GetTailPutLine() == UINT16_MAX ?
+                   true :
+                   b->GetTailPutLine() == UINT16_MAX ?
+                   false :
+                   a->GetTailPutLine() < b->GetTailPutLine();
         });
 
     // Assign dataOffset and topFreezeLine to each droplet
