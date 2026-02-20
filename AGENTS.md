@@ -2,7 +2,8 @@
 
 ## Project Overview
 
-**neo** is a C++ terminal application that recreates the digital rain effect from "The Matrix". It displays streams of random characters scrolling down the terminal screen with configurable colors, character sets, and effects.
+**neo** is a C++ terminal application that recreates the digital rain effect from "The Matrix". It displays streams of simingly random characters scrolling down the terminal screen with configurable colors, character sets, and effects.
+The primary purpose of this application is to display a portion of text from input file at the end of each epoch. Next epoch will display text at offset where the previous epoch ended. Hence, entire input file will be displayed with a number of epochs.
 
 ## Key Information for AI Agents
 
@@ -70,8 +71,7 @@ neo/
 ```bash
 ./autogen.sh
 ./configure
-make -j3
-sudo make install
+make -j
 ```
 
 #### Debug Build:
@@ -93,7 +93,7 @@ sudo make install-strip
 - **Common Options**: `--help`, `--version`, `--message "text"`, `--color green`
 
 ### Code Style & Conventions
-- **Language**: C++11 with some C idioms
+- **Language**: C++17 with some C idioms
 - **Bracing**: K&R style
 - **Indentation**: Soft tabs (spaces)
 - **Naming**: CamelCase for classes, snake_case for variables/functions
@@ -105,28 +105,6 @@ sudo make install-strip
 - **Unicode Support**: Uses ncursesw for wide character support
 - **Color Modes**: Supports 16/256/truecolor modes with auto-detection
 - **Character Sets**: Multiple predefined charsets (katakana, Greek, Cyrillic, etc.)
-
-### Common Tasks for AI Agents
-
-1. **Adding New Features**:
-   - Check `HACKING` for contribution guidelines
-   - Follow existing patterns in Cloud/Droplet classes
-   - Update command-line parsing in `neo.cpp`
-
-2. **Bug Fixes**:
-   - Reproduce issue with specific CLI options
-   - Check terminal compatibility issues
-   - Verify Unicode/color support
-
-3. **Performance Improvements**:
-   - Profile with `-g -O0` debug build
-   - Focus on drawing optimization
-   - Consider memory pool optimizations
-
-4. **Documentation Updates**:
-   - Update `README.md` for user-facing changes
-   - Update `doc/neo.6` for man page changes
-   - Add examples to `examples/` directory
 
 ### Quick Reference
 
@@ -144,10 +122,38 @@ sudo make install-strip
 - macOS: May need `LDFLAGS`/`CPPFLAGS` for Homebrew ncurses
 
 ### Known Issues & Workarounds
-- **Garbage Characters**: Use `--charset=ascii` or `--colormode=0`
 - **No Colors**: Check `TERM` variable, use `--colormode` option
-- **Blinking Characters**: Disable with `--noglitch`
 - **Unicode Issues**: Ensure locale supports UTF-8, use Unicode-capable font
 - **Terminal Resize**: Not handled - terminal size is fixed at startup. The `KEY_RESIZE` event is intentionally ignored as the use case assumes a fixed terminal size.
 
-This document should help AI agents quickly understand the neo codebase and work effectively on future tasks.
+### How It Works
+
+1. **Dual-Pass System**:
+   - **Simulation Pass**: Before displaying anything, the app runs a complete simulation of an "epoch" to determine where all droplets will end up. At the end of the epoch, it sorts all active droplets and assigns their `_dataOffset` and `_topFreezeLine` so that characters from the input file are displayed column by column (left to right, top to bottom).
+   - **Display Pass**: The actual animation replays the same pseudo-random sequence using identical seeds, producing the same droplet positions as the simulation
+
+2. **Key Data Structures**:
+   - `Droplet._dataOffset`: Byte offset into the input text file where this droplet's text starts
+   - `Droplet._topFreezeLine`: Screen line where the top of this droplet was positioned at epoch end
+   - These are calculated during `SimulateEpoch()` and used during the actual `Draw()`
+
+3. **Text Mapping**:
+   - When a droplet is drawn at/after its `_topFreezeLine`, characters come from the input file
+   - `GetChar()` at `cloud.cpp:447-455` returns file content: `_mmapData[(_mmapOffset + dataOffset) % _mmapSize]`
+   - Before `_topFreezeLine`, random characters from the char pool are shown
+   - After `_topFreezeLine`, input text characters are displayed
+
+4. **Column-First Reading**:
+   - To read the hidden message from screen output, read column by column (top-to-bottom, then next column)
+   - Each column's characters form part of the continuous text stream
+
+### Source Files
+- **Input text**: `input_text.txt` in the project root (the file to be displayed)
+- **Screen capture**: In debug mode, screen content is written to `screen-1.txt`, `screen-2.txt`, etc. at the end of each epoch (text files containing visible screen output)
+
+### Debugging Tips
+- Check `SimulateEpoch()` in `cloud.cpp:160-225` for epoch simulation logic
+- Check `CountDropletsAndChars()` in `cloud.cpp:350-381` for dataOffset calculation
+- Check `GetChar()` in `cloud.cpp:447-455` for character retrieval
+- Check `Draw()` in `droplet.cpp:141-187` for the drawing logic that uses `_dataOffset`
+- At the end of epoch screen content will be written to `screen-<epoch-number>.txt` file
