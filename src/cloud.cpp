@@ -200,6 +200,7 @@ void Cloud::Rain() {
 		        }
 
 		        dropletsFile.close();
+                if (epochNum >= 2) exit(0);
 		    }
 		}
 		assert(num_bytes_predicted == UINT32_MAX || num_bytes_predicted == num_bytes_actually);
@@ -518,7 +519,13 @@ void Cloud::SetCharsPerSec(float cps) {
 wchar_t Cloud::GetChar(uint16_t line, uint16_t charOffset, uint16_t dataOffset) const {
     if (_mmapData && dataOffset < UINT16_MAX) {
         size_t index = (_mmapOffset + dataOffset) % _mmapSize;
-        return _mmapData[index];
+        wchar_t ch = _mmapData[index];
+        // Filter out control characters that could affect terminal display
+        // (newlines, tabs, carriage returns, escape sequences, etc.)
+        if (ch < 32 || ch == 127) {
+            return ' ';
+        }
+        return ch;
     } else {
         const size_t charIdx = (charOffset + line) % _charPool.size();
         return _charPool[charIdx];

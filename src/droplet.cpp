@@ -156,7 +156,9 @@ void Droplet::Draw(uint64_t curTimeMs) {
     // }
 
     for (uint16_t line = startLine; line <= _headPutLine; line++) {
-        const wchar_t val = _pCloud->GetChar(line, _charPoolIdx, line >= _topFreezeLine ? _dataOffset + line - _topFreezeLine : UINT16_MAX);
+
+        uint16_t offset = line >= _topFreezeLine ? _dataOffset + line - _topFreezeLine : UINT16_MAX;
+        const wchar_t val = _pCloud->GetChar(line, _charPoolIdx, offset);
 
         CharLoc cl = CharLoc::MIDDLE;
         if (_tailPutLine != 0xFFFF && line == _tailPutLine + 1)
@@ -171,6 +173,14 @@ void Droplet::Draw(uint64_t curTimeMs) {
 
         Cloud::CharAttr attr;
         _pCloud->GetAttr(line, _boundCol, val, cl, &attr, curTimeMs, _headPutLine, _length);
+
+        // if (_boundCol == 114) {
+        //     debug.log("  _boundCol: " + std::to_string(_boundCol) +
+        //               "  offset: " + std::to_string(offset) +
+        //               "  line: " + std::to_string(line) +
+        //               "  val: " + std::string(1, val)
+        //               );
+        // }
 
         attr_t attr2 = attr.isBold ? A_BOLD : A_NORMAL;
         cchar_t wc = {};
