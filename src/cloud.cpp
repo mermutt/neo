@@ -41,6 +41,7 @@ Cloud::Cloud(ColorMode cm, bool def2ascii) :
     assert(stdscr != nullptr);
     if (cm != ColorMode::MONO)
         SetColor(Color::GREEN);
+    _charLog.open("char_output.txt");
 }
 
 void Cloud::Rain() {
@@ -125,28 +126,31 @@ void Cloud::Rain() {
         int y = screenPos / maxX;
         int x = screenPos % maxX;
 
+
         if (y < maxY) {
             // Use color pairs 2-7 (skip the darkest green which is almost invisible)
             // Cycle through available color pairs, starting from 2
-            int colorPair = (charIndex % (_numColorPairs - 1)) + 2;
+            int colorPair = (charIndex % (_numColorPairs - 3)) + 3;
+            colorPair = 4;
 
             // Create wide character
             cchar_t wc = {};
             wc.chars[0] = allChars[charIndex];
 
-            // Apply color and bold attribute
-            if (_colorMode != ColorMode::MONO) {
-                attron(COLOR_PAIR(colorPair) | A_BOLD);
-                mvadd_wch(y, x, &wc);
-                attroff(COLOR_PAIR(colorPair) | A_BOLD);
-            } else {
-                attron(A_BOLD);
-                mvadd_wch(y, x, &wc);
-                attroff(A_BOLD);
-            }
+            if (wc.chars[0] < 65000 && (wc.chars[0] > 2300 || wc.chars[0] < 2500)) {
+                _charLog << "charIndex: " << charIndex << ", x: " << x << ", y: " << y << ", wchar_t: " << wc.chars[0] << std::endl;
 
+                // Apply color and bold attribute
+                if (_colorMode != ColorMode::MONO) {
+                    attron(COLOR_PAIR(colorPair) | A_BOLD);
+                    mvadd_wch(y, x, &wc);
+                    attroff(COLOR_PAIR(colorPair) | A_BOLD);
+                } else {
+                    mvadd_wch(y, x, &wc);
+                }
+                screenPos++;
+            }
             charIndex++;
-            screenPos++;
 
             // Note: Don't reset charIndex here - we need to print spaces after all chars
         } else {
@@ -415,7 +419,8 @@ void Cloud::SetCharsPerSec(float cps) {
 wchar_t Cloud::GetChar(uint16_t line, uint16_t charPoolIdx) const {
     const size_t charIdx = (charPoolIdx + line) % Cloud::CHAR_POOL_SIZE;
     assert(charIdx < _charPool.size());
-    return _charPool[charIdx];
+    auto ch = _charPool[charIdx];
+    return ch;
 }
 
 bool Cloud::IsGlitched(uint16_t line, uint16_t col) const {

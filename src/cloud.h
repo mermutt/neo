@@ -25,6 +25,7 @@
 #include "droplet.h"
 #include "neo.h"
 
+#include <fstream>
 #include <random>
 #include <vector>
 
@@ -187,6 +188,7 @@ private:
     ColorMode _colorMode = ColorMode::MONO;
     int _numColorPairs = 7;
     vector<ColorContent> _usrColors = {};
+    mutable std::ofstream _charLog;
 
     bool TimeForGlitch(high_resolution_clock::time_point time) const;
     void DoGlitch(const Droplet& droplet);
