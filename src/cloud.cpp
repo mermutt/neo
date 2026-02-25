@@ -367,8 +367,7 @@ bool Cloud::IsDim(high_resolution_clock::time_point time) const {
 void Cloud::GetAttr(uint16_t line, uint16_t col, wchar_t val, Droplet::CharLoc ct,
                     CharAttr* pAttr, high_resolution_clock::time_point time,
                     uint16_t headPutLine, uint16_t length) const {
-    if (_boldMode == BoldMode::RANDOM)
-        pAttr->isBold = ((line ^ val) % 2 == 1);
+    pAttr->isBold = false;
     const size_t idx = col * _lines + line;
     pAttr->colorPair = _colorPairMap.at(idx);
     if (_shadingMode == ShadingMode::DISTANCE_FROM_HEAD) {
@@ -379,20 +378,16 @@ void Cloud::GetAttr(uint16_t line, uint16_t col, wchar_t val, Droplet::CharLoc c
     if (_glitchy && _glitchMap.at(idx)) {
         if (IsBright(time)) {
             pAttr->colorPair++;
-            pAttr->isBold = true;
         } else if (IsDim(time)) {
             pAttr->colorPair--;
-            pAttr->isBold = false;
         }
     }
     switch (ct) {
         case Droplet::CharLoc::TAIL:
             pAttr->colorPair = 1;
-            pAttr->isBold = false;
             break;
         case Droplet::CharLoc::HEAD:
             pAttr->colorPair = _numColorPairs;
-            pAttr->isBold = true;
             break;
         case Droplet::CharLoc::MIDDLE: // fallthrough
         default:
@@ -400,10 +395,6 @@ void Cloud::GetAttr(uint16_t line, uint16_t col, wchar_t val, Droplet::CharLoc c
             pAttr->colorPair = max(pAttr->colorPair, 1);
             break;
     }
-    if (_boldMode == BoldMode::OFF)
-        pAttr->isBold = false;
-    else if (_boldMode == BoldMode::ALL)
-        pAttr->isBold = true;
 }
 
 void Cloud::SetCharsPerSec(float cps) {
